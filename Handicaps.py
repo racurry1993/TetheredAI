@@ -22,10 +22,10 @@ st.write(f"Data for Handicap Index: {selected_handicap}")
 
 st.dataframe(filtered_df)
 st.subheader("Statistics by Handicap Index")
-fig = px.px.bar(
+fig = px.bar(
     filtered_df,
-    x=['Avg Score to Par','FIR','FIR_Left','FIR_Right'],
-    y=filtered_df.columns[1:4],
+    x=['Avg Score to Par','Average Score by Hole Type - 3','Average Score by Hole Type - 4','Average Score by Hole Type - 5'],
+    y=filtered_df.columns[1:5],
     title=f"Statistics for Handicap Index: {selected_handicap}",
     labels={'value': 'Statistics', 'variable': 'Category'}
 )
