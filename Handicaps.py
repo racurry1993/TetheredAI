@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from scipy.stats import pearsonr # Import pearsonr for correlation calculation
 
 # Page configuration
 st.set_page_config(page_title="Tethered AI Golf Data Analysis", layout="wide")
@@ -18,6 +19,61 @@ try:
 except FileNotFoundError:
     st.error("CSV File not found. Please ensure 'Handicap Stats.csv' is in the correct directory.")
     st.stop()
+
+# --- Function to generate personalized handicap advice ---
+def generate_handicap_advice(df_full, current_handicap_focus):
+    """
+    Generates personalized advice based on correlation analysis of the full dataset.
+
+    Args:
+        df_full (pd.DataFrame): The complete DataFrame containing all handicap data.
+        current_handicap_focus (int): The current handicap for which to generate advice.
+
+    Returns:
+        str: A markdown-formatted string containing the personalized advice.
+    """
+    numerical_cols = df_full.select_dtypes(include=['number']).columns.tolist()
+    if 'Handicap' in numerical_cols:
+        numerical_cols.remove('Handicap') # Remove Handicap itself from features to correlate
+
+    if not numerical_cols:
+        return "No other numerical columns found for correlation analysis besides 'Handicap' to generate advice."
+
+    correlations = {}
+    for col in numerical_cols:
+        # Calculate Pearson correlation between the feature and 'Handicap'
+        # This is done on the full dataset to understand overall drivers
+        corr, _ = pearsonr(df_full[col], df_full['Handicap'])
+        correlations[col] = corr
+
+    # Sort correlations to find the strongest drivers (negative correlations are better for handicap)
+    sorted_correlations = sorted(correlations.items(), key=lambda item: item[1])
+
+    advice_lines = []
+    target_handicap = current_handicap_focus - 1
+    advice_lines.append(f"### Personalized Advice for a {current_handicap_focus} Handicap Golfer")
+    advice_lines.append(f"To move from a {current_handicap_focus} handicap towards a {target_handicap} handicap, focus on the following key areas based on your data:")
+
+    advice_given = False
+    # Recommend improving stats with strong negative correlation (increase these values)
+    # A negative correlation means as this stat increases, handicap decreases (good)
+    for feature, corr_val in sorted_correlations:
+        if corr_val < -0.3: # Using a threshold of -0.3 for 'strong' negative correlation
+            advice_lines.append(f"  - **Improve {feature}:** This metric has a strong negative correlation ({corr_val:.2f}) with handicap. Increasing your performance in {feature} (e.g., hitting the ball further, hitting more greens, etc.) is highly likely to reduce your handicap.")
+            advice_given = True
+
+    # Recommend improving stats with strong positive correlation (decrease these values)
+    # A positive correlation means as this stat increases, handicap increases (bad)
+    # Iterate in reverse to get strongest positive correlations first
+    for feature, corr_val in reversed(sorted_correlations):
+        if corr_val > 0.3: # Using a threshold of 0.3 for 'strong' positive correlation
+            advice_lines.append(f"  - **Reduce {feature}:** This metric has a strong positive correlation ({corr_val:.2f}) with handicap. Decreasing your performance in {feature} (e.g., fewer putts, fewer penalty strokes, etc.) is highly likely to reduce your handicap.")
+            advice_given = True
+
+    if not advice_given:
+        advice_lines.append("No strong correlations found to provide specific advice based on the current data and thresholds. Your golf game might have a balanced set of strengths and weaknesses, or more data might be needed.")
+
+    return "\n".join(advice_lines)
 
 # Organize layout with tabs
 tab1, tab2, tab3 = st.tabs(["Overview", "Trends", "Comparisons"])
@@ -37,7 +93,11 @@ with tab1:
         cols = st.columns(num_cols_per_row)
         for j, col_name in enumerate(columns[i:i + num_cols_per_row]):
             with cols[j]:
-                st.metric(col_name, f"{filtered_df[col_name].iloc[0]:.2f}")
+                # Ensure the column exists in filtered_df before trying to access it
+                if col_name in filtered_df.columns and not filtered_df.empty:
+                    st.metric(col_name, f"{filtered_df[col_name].iloc[0]:.2f}")
+                else:
+                    st.metric(col_name, "N/A") # Handle cases where data might be missing for a specific handicap
 
     # Bar chart (fixed to handle all columns except 'Handicap')
     st.subheader("Statistics by Handicap Index")
@@ -76,6 +136,15 @@ with tab1:
     )
     st.plotly_chart(fig_radar, use_container_width=True)
 
+    # --- Integrate Personalized Advice Here ---
+    st.markdown("---") # Add a separator for better visual organization
+    if selected_handicap: # Ensure a handicap is selected before generating advice
+        advice_text = generate_handicap_advice(df, selected_handicap)
+        st.markdown(advice_text)
+    else:
+        st.info("Select a handicap index above to receive personalized improvement advice.")
+
+
 with tab2:
     st.subheader("Trends Across Handicap Levels")
     # Line plot for trends across handicaps
@@ -91,32 +160,42 @@ with tab2:
 
     # Box plot for score distribution
     st.subheader("Score Distribution Across All Handicaps")
-    fig_box = px.box(
-        df,
-        x='Handicap',
-        y='Avg Score to Par',
-        title="Distribution of Average Score to Par by Handicap",
-        labels={'Avg Score to Par': 'Average Score to Par'}
-    )
-    st.plotly_chart(fig_box, use_container_width=True)
+    # Check if 'Avg Score to Par' exists before plotting
+    if 'Avg Score to Par' in df.columns:
+        fig_box = px.box(
+            df,
+            x='Handicap',
+            y='Avg Score to Par',
+            title="Distribution of Average Score to Par by Handicap",
+            labels={'Avg Score to Par': 'Average Score to Par'}
+        )
+        st.plotly_chart(fig_box, use_container_width=True)
+    else:
+        st.warning("Column 'Avg Score to Par' not found for box plot.")
+
 
     # Correlation heatmap
     st.subheader("Correlation Between Metrics")
-    corr_matrix = df[df.columns[1:]].corr()
-    fig_heatmap = px.imshow(
-        corr_matrix,
-        text_auto=True,
-        title="Correlation Heatmap of Golf Metrics",
-        labels=dict(x="Metric", y="Metric", color="Correlation")
-    )
-    st.plotly_chart(fig_heatmap, use_container_width=True)
+    # Ensure there are enough numerical columns for correlation calculation
+    if len(df.columns[1:]) > 1:
+        corr_matrix = df[df.columns[1:]].corr()
+        fig_heatmap = px.imshow(
+            corr_matrix,
+            text_auto=True,
+            title="Correlation Heatmap of Golf Metrics",
+            labels=dict(x="Metric", y="Metric", color="Correlation")
+        )
+        st.plotly_chart(fig_heatmap, use_container_width=True)
+    else:
+        st.info("Not enough numerical columns to generate a meaningful correlation heatmap.")
+
 
 with tab3:
     st.subheader("Compare Multiple Handicaps")
     selected_handicaps = st.multiselect(
-        "Select Handicaps to Compare:", 
-        handicap_options, 
-        default=[handicap_options[0], handicap_options[-1]],
+        "Select Handicaps to Compare:",
+        handicap_options,
+        default=[handicap_options[0], handicap_options[-1]] if handicap_options else [], # Handle empty options
         key="compare_select"
     )
     if selected_handicaps:
@@ -147,18 +226,20 @@ with tab3:
             file_name="selected_handicap_data.csv",
             mime="text/csv"
         )
+    else:
+        st.info("Select at least one handicap to compare.")
 
 # Explanatory text
 st.sidebar.markdown("""
 ### About This App
-This app analyzes amateur golf handicap statistics, providing insights into performance across different handicap levels. 
+This app analyzes amateur golf handicap statistics, providing insights into performance across different handicap levels.
 
 **Metrics Explained:**
 - **Avg Score to Par**: Average score relative to par across all holes.
 - **Par 3/4/5 Avg Score**: Average score on par 3, 4, and 5 holes, respectively.
 
 **Tabs:**
-- **Overview**: Detailed stats for a single handicap.
+- **Overview**: Detailed stats for a single handicap, including personalized advice.
 - **Trends**: Trends and distributions across all handicaps.
 - **Comparisons**: Compare metrics across multiple handicaps.
 """)
