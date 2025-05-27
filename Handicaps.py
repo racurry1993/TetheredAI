@@ -147,16 +147,43 @@ with tab1:
 
 with tab2:
     st.subheader("Trends Across Handicap Levels")
-    # Line plot for trends across handicaps
-    fig_trend = px.line(
-        df,
-        x='Handicap',
-        y=df.columns[1:],
-        title="Performance Trends Across Handicap Levels",
-        labels={'value': 'Score', 'variable': 'Metric'}
-    )
-    fig_trend.update_layout(showlegend=True, legend_title_text='Metrics')
-    st.plotly_chart(fig_trend, use_container_width=True)
+
+    # Correlation plots sorted by importance
+    st.markdown("### Metric Trends by Handicap (Sorted by Correlation Importance)")
+    st.markdown("""
+        These plots show how each golf metric changes across different handicap levels.
+        The charts are ordered by the **absolute strength of their correlation with Handicap**,
+        meaning metrics with the strongest impact (positive or negative) on handicap are shown first.
+    """)
+
+    numerical_cols_for_trends = df.select_dtypes(include=['number']).columns.tolist()
+    if 'Handicap' in numerical_cols_for_trends:
+        numerical_cols_for_trends.remove('Handicap')
+
+    if numerical_cols_for_trends:
+        # Calculate correlations for sorting
+        correlations_for_sorting = {}
+        for col in numerical_cols_for_trends:
+            corr, _ = pearsonr(df[col], df['Handicap'])
+            correlations_for_sorting[col] = abs(corr) # Use absolute correlation for importance
+
+        # Sort metrics by absolute correlation in descending order
+        sorted_metrics_by_importance = sorted(correlations_for_sorting.items(), key=lambda item: item[1], reverse=True)
+
+        for metric, abs_corr in sorted_metrics_by_importance:
+            fig_metric_trend = px.line(
+                df,
+                x='Handicap',
+                y=metric,
+                title=f"Trend: {metric} vs. Handicap (Abs. Correlation: {abs_corr:.2f})",
+                labels={'Handicap': 'Handicap Index', metric: metric}
+            )
+            fig_metric_trend.update_traces(mode='lines+markers') # Show points as well
+            fig_metric_trend.update_layout(hovermode="x unified") # Unified hover for better comparison
+            st.plotly_chart(fig_metric_trend, use_container_width=True)
+    else:
+        st.info("No numerical metrics available to plot trends by handicap.")
+
 
     # Box plot for score distribution
     st.subheader("Score Distribution Across All Handicaps")
@@ -175,7 +202,7 @@ with tab2:
 
 
     # Correlation heatmap
-    st.subheader("Correlation Between Metrics")
+    st.subheader("Overall Correlation Between Metrics")
     # Ensure there are enough numerical columns for correlation calculation
     if len(df.columns[1:]) > 1:
         corr_matrix = df[df.columns[1:]].corr()
@@ -240,6 +267,6 @@ This app analyzes amateur golf handicap statistics, providing insights into perf
 
 **Tabs:**
 - **Overview**: Detailed stats for a single handicap, including personalized advice.
-- **Trends**: Trends and distributions across all handicaps.
+- **Trends**: Trends and distributions across all handicaps, with metrics sorted by their correlation importance to handicap.
 - **Comparisons**: Compare metrics across multiple handicaps.
 """)
