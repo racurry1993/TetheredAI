@@ -247,16 +247,28 @@ def professional_golf_analysis():
             st.warning("The 'Player' column was not found in the predictions file.")
 
         st.subheader("Highest Probability of Winning")
-        # Define the columns for the table
-        display_columns = ['Last T1 Finish', 'Last T2 Finish', 'Last T3 Finish', 'Previous_Year_Position']
+        # Define the columns for the table, including the newly requested ones
+        display_columns = [
+            'Last T1 Finish',
+            'Last T2 Finish',
+            'Last T3 Finish',
+            'Previous_Year_Position',
+            'Early_Rounds_Avg',
+            'Last_3_Early_Rounds_Avg',
+            'Days_Since_Last_Tournament'
+        ]
         
         # Check if all display columns exist in the DataFrame
         if all(col in preds_df.columns for col in display_columns):
             # Select the relevant columns and set 'Player' as index
             winning_prob_df = preds_df.set_index('Player')[display_columns]
 
-            # Replace 100 with 'DNF'
-            winning_prob_df = winning_prob_df.replace(100, 'DNF')
+            # Replace 100 with 'DNF' in the specified columns
+            # Ensure the columns are numeric before replacing if they are not already
+            for col in ['Last T1 Finish', 'Last T2 Finish', 'Last T3 Finish', 'Previous_Year_Position']:
+                if col in winning_prob_df.columns:
+                    winning_prob_df[col] = pd.to_numeric(winning_prob_df[col], errors='coerce')
+                    winning_prob_df[col] = winning_prob_df[col].replace(100, 'DNF')
 
             st.dataframe(winning_prob_df)
         else:
