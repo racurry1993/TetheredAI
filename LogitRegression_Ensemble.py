@@ -9,7 +9,7 @@ import os
 
 tournament_name = r'''the Memorial Tournament pres. by Workday'''
 
-os.chdir(r'C:\Users\rfo7799\Desktop\Git\PGA-Tour')
+os.chdir(r'C:\Users\rfo7799\Desktop\Git\TetheredAI')
 
 df = pd.read_csv(r'full_tournament_data.csv')
 #df = pd.read_csv(r'data.csv')
@@ -495,7 +495,7 @@ predict_data[['Player','Preds']].sort_values('Preds', ascending=True)
 from datetime import datetime
 last_dw_update = datetime.today().strftime('%Y-%m-%d')
 predict_data = predict_data.sort_values('Preds', ascending=True)
-predict_data.to_csv(fr'C:\Users\rfo7799\Desktop\Git\PGA-Tour\Predictions\LR_Preds_{last_dw_update}.csv')
+predict_data.to_csv(fr'C:\Users\rfo7799\Desktop\Git\TetheredAI\Predictions\LR_Preds_{last_dw_update}.csv')
 print(predict_data[['Player','Preds']].sort_values('Preds', ascending=True))
 
 
@@ -508,7 +508,7 @@ preds = model.predict(X)
 predict_data['Preds'] = preds
 print(predict_data[['Player','Preds']].sort_values('Preds', ascending=True)[:10])
 predict_data = predict_data.sort_values('Preds', ascending=True).reset_index()
-predict_data.to_csv(fr'C:\Users\rfo7799\Desktop\Git\PGA-Tour\Predictions\LGBM_Preds_{last_dw_update}.csv')
+predict_data.to_csv(fr'C:\Users\rfo7799\Desktop\Git\TetheredAI\Predictions\LGBM_Preds_{last_dw_update}.csv')
 
 ###############################################################################
 
@@ -631,7 +631,7 @@ predict_data[['Player','Preds']].sort_values('Preds', ascending=False)
 from datetime import datetime
 last_dw_update = datetime.today().strftime('%Y-%m-%d')
 predict_data = predict_data.sort_values('Preds', ascending=False)
-predict_data.to_csv(fr'C:\Users\rfo7799\Desktop\Git\PGA-Tour\Predictions\LR_Preds_{last_dw_update}.csv')
+predict_data.to_csv(fr'C:\Users\rfo7799\Desktop\Git\TetheredAI\Predictions\LR_Preds_{last_dw_update}.csv')
 print(predict_data[['Player','Preds']].sort_values('Preds', ascending=False))
 
 ###############################################################################

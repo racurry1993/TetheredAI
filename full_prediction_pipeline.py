@@ -5,7 +5,7 @@ import time
 import re
 import os
 
-os.chdir(r'C:\Users\rfo7799\Desktop\Git\PGA-Tour')
+os.chdir(r'C:\Users\rfo7799\Desktop\Git\TetheredAI')
 
 #https://www.espn.com/golf/schedule
 
@@ -692,7 +692,7 @@ results['Normalized_Predictions'] = mapped_values
 from datetime import datetime
 last_dw_update = datetime.today().strftime('%Y-%m-%d')
 import os
-folder_path = r'C:\Users\rfo7799\Desktop\Git\PGA-Tour\Predictions'
+folder_path = r'C:\Users\rfo7799\Desktop\Git\TetheredAI\Predictions'
 os.makedirs(folder_path, exist_ok=True)  # Create folder if it doesn't exist
 results.to_csv(f'{folder_path}\\All_Results_{last_dw_update}.csv', index=False)
 print(results[:50])
