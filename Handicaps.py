@@ -227,7 +227,7 @@ def amateur_handicap_analysis():
 # Professional Golf Tournament Analysis page
 def professional_golf_analysis():
     st.title("Professional Golf Tournament Analysis")
-    st.markdown("Insights into professional golf tournament data.")
+    st.markdown("Insights into professional golf tournament data using AI and Machine Learning.")
 
     preds_file_path = "Predictions/LR_Preds_2025-05-28.csv"
     preds_df = load_data(preds_file_path)
