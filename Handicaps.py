@@ -7,13 +7,15 @@ from scipy.stats import pearsonr  # Import pearsonr for correlation calculation
 st.set_page_config(page_title="Tethered AI Golf Data Analysis", layout="wide")
 
 # Function to load data
-def load_data():
-    csv_file = "Handicap Stats.csv"
+def load_data(file_path):
     try:
-        df = pd.read_csv(csv_file)
+        df = pd.read_csv(file_path)
         return df
     except FileNotFoundError:
-        st.error("CSV File not found. Please ensure 'Handicap Stats.csv' is in the correct directory.")
+        st.error(f"File not found: {file_path}. Please ensure the CSV is in the correct directory.")
+        st.stop()
+    except Exception as e:
+        st.error(f"Error loading {file_path}: {e}")
         st.stop()
 
 # Function to generate personalized handicap advice
@@ -27,8 +29,13 @@ def generate_handicap_advice(df_full, current_handicap_focus):
 
     correlations = {}
     for col in numerical_cols:
-        corr, _ = pearsonr(df_full[col], df_full['Handicap'])
-        correlations[col] = corr
+        # Ensure there are no NaN values for correlation calculation
+        temp_df = df_full[[col, 'Handicap']].dropna()
+        if not temp_df.empty:
+            corr, _ = pearsonr(temp_df[col], temp_df['Handicap'])
+            correlations[col] = corr
+        else:
+            correlations[col] = 0 # Assign 0 if no valid data for correlation
 
     sorted_correlations = sorted(correlations.items(), key=lambda item: item[1])
 
@@ -68,7 +75,7 @@ def landing_page():
 
 # Amateur Handicap Analysis page
 def amateur_handicap_analysis():
-    df = load_data()
+    df = load_data("Handicap Stats.csv") # Assuming Handicap Stats.csv is in the root
     
     st.title("Tethered AI Golf Data Analysis")
     st.header("Amateur Golf Handicap Statistics")
@@ -119,8 +126,12 @@ def amateur_handicap_analysis():
         if numerical_cols_for_trends:
             correlations_for_sorting = {}
             for col in numerical_cols_for_trends:
-                corr, _ = pearsonr(df[col], df['Handicap'])
-                correlations_for_sorting[col] = abs(corr)
+                temp_df_corr = df[[col, 'Handicap']].dropna()
+                if not temp_df_corr.empty:
+                    corr, _ = pearsonr(temp_df_corr[col], temp_df_corr['Handicap'])
+                    correlations_for_sorting[col] = abs(corr)
+                else:
+                    correlations_for_sorting[col] = 0
 
             sorted_metrics_by_importance = sorted(correlations_for_sorting.items(), key=lambda item: item[1], reverse=True)
 
@@ -154,8 +165,9 @@ def amateur_handicap_analysis():
 
         # Correlation heatmap
         st.subheader("Overall Correlation Between Metrics")
-        if len(df.columns[1:]) > 1:
-            corr_matrix = df[df.columns[1:]].corr()
+        numerical_df_for_heatmap = df.select_dtypes(include=['number'])
+        if len(numerical_df_for_heatmap.columns) > 1:
+            corr_matrix = numerical_df_for_heatmap.corr()
             fig_heatmap = px.imshow(
                 corr_matrix,
                 text_auto=True,
@@ -176,10 +188,20 @@ def amateur_handicap_analysis():
         )
         if selected_handicaps:
             compare_df = df[df["Handicap"].isin(selected_handicaps)]
+            
+            # Melt the DataFrame for grouped bar chart
+            melted_compare_df = compare_df.melt(id_vars=['Handicap'], var_name='Metric', value_name='Value')
+
+            # Filter out 'Handicap' column from the metrics if it somehow got in
+            metrics_to_plot = [col for col in df.columns[1:] if col != 'Handicap']
+            filtered_melted_df = melted_compare_df[melted_compare_df['Metric'].isin(metrics_to_plot)]
+
+
             fig_compare = px.bar(
-                compare_df,
+                filtered_melted_df,
                 x='Handicap',
-                y=df.columns[1:],
+                y='Value',
+                color='Metric',
                 barmode='group',
                 title="Comparison of Metrics Across Selected Handicaps",
                 labels={'value': 'Score', 'variable': 'Metric'}
@@ -202,10 +224,47 @@ def amateur_handicap_analysis():
         else:
             st.info("Select at least one handicap to compare.")
 
-# Professional Golf Tournament Analysis page (placeholder)
+# Professional Golf Tournament Analysis page
 def professional_golf_analysis():
     st.title("Professional Golf Tournament Analysis")
-    st.markdown("This section is under development. Check back soon for professional golf tournament insights!")
+    st.markdown("Insights into professional golf tournament data.")
+
+    preds_file_path = "Predictions/LR_Preds_2025-05-28.csv"
+    preds_df = load_data(preds_file_path)
+
+    if preds_df is not None and not preds_df.empty:
+        # Display Tournament name at the top
+        if 'Tournament' in preds_df.columns and not preds_df['Tournament'].empty:
+            tournament_name = preds_df['Tournament'].iloc[0]
+            st.header(f"Tournament: {tournament_name}")
+
+        st.subheader("Top 10 Player Predictions")
+        # Ensure 'Player' column exists
+        if 'Player' in preds_df.columns:
+            top_10_players = preds_df.head(10)[['Player']]
+            st.dataframe(top_10_players, hide_index=True)
+        else:
+            st.warning("The 'Player' column was not found in the predictions file.")
+
+        st.subheader("Highest Probability of Winning")
+        # Define the columns for the table
+        display_columns = ['Last T1 Finish', 'Last T2 Finish', 'Last T3 Finish', 'Previous_Year_Position']
+        
+        # Check if all display columns exist in the DataFrame
+        if all(col in preds_df.columns for col in display_columns):
+            # Select the relevant columns and set 'Player' as index
+            winning_prob_df = preds_df.set_index('Player')[display_columns]
+
+            # Replace 100 with 'DNF'
+            winning_prob_df = winning_prob_df.replace(100, 'DNF')
+
+            st.dataframe(winning_prob_df)
+        else:
+            missing_cols = [col for col in display_columns if col not in preds_df.columns]
+            st.warning(f"Missing one or more required columns for 'Highest Probability of Winning' table: {', '.join(missing_cols)}")
+    else:
+        st.info("No professional golf predictions available at this time.")
+
 
 # Main app logic
 def main():
