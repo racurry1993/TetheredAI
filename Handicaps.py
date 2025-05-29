@@ -4,9 +4,10 @@ import plotly.express as px
 from scipy.stats import pearsonr  # Import pearsonr for correlation calculation
 
 # Page configuration
-st.set_page_config(page_title="Tethered AI Golf Data Analysis", layout="wide")
+st.set_page_config(page_title="Tethered AI Golf Data Analysis", layout="wide", initial_sidebar_state="expanded") # Added initial_sidebar_state
 
 # Function to load data
+@st.cache_data # Cache data to improve performance
 def load_data(file_path):
     try:
         df = pd.read_csv(file_path)
@@ -40,19 +41,19 @@ def generate_handicap_advice(df_full, current_handicap_focus):
     sorted_correlations = sorted(correlations.items(), key=lambda item: item[1])
 
     advice_lines = []
-    target_handicap = current_handicap_focus - 1
+    target_handicap = current_handicap_focus - 1 if current_handicap_focus > 0 else 0
     advice_lines.append(f"### Personalized Advice for a {current_handicap_focus} Handicap Golfer")
-    advice_lines.append(f"To move from a {current_handicap_focus} handicap towards a {target_handicap} handicap, focus on the following key areas based on your data:")
+    advice_lines.append(f"To move from a **{current_handicap_focus} handicap** towards a **{target_handicap} handicap**, focus on the following key areas based on your data:")
 
     advice_given = False
     for feature, corr_val in sorted_correlations:
-        if corr_val < -0.3:
-            advice_lines.append(f"  - **Improve {feature}:** This metric has a strong negative correlation ({corr_val:.2f}) with handicap. Increasing your performance in {feature} (e.g., hitting the ball further, hitting more greens, etc.) is highly likely to reduce your handicap.")
+        if corr_val < -0.3: # Strong negative correlation
+            advice_lines.append(f"  - <span style='color:green'>**Improve {feature}:**</span> This metric has a strong negative correlation ($${corr_val:.2f}$$) with handicap. Increasing your performance in {feature} (e.g., hitting the ball further, hitting more greens, etc.) is highly likely to reduce your handicap.")
             advice_given = True
 
     for feature, corr_val in reversed(sorted_correlations):
-        if corr_val > 0.3:
-            advice_lines.append(f"  - **Reduce {feature}:** This metric has a strong positive correlation ({corr_val:.2f}) with handicap. Decreasing your performance in {feature} (e.g., fewer putts, fewer penalty strokes, etc.) is highly likely to reduce your handicap.")
+        if corr_val > 0.3: # Strong positive correlation
+            advice_lines.append(f"  - <span style='color:red'>**Reduce {feature}:**</span> This metric has a strong positive correlation ($${corr_val:.2f}$$) with handicap. Decreasing your performance in {feature} (e.g., fewer putts, fewer penalty strokes, etc.) is highly likely to reduce your handicap.")
             advice_given = True
 
     if not advice_given:
@@ -62,8 +63,9 @@ def generate_handicap_advice(df_full, current_handicap_focus):
 
 # Landing page
 def landing_page():
-    st.title("Welcome to Tethered AI")
-    st.markdown("Select an analysis option below to explore golf statistics:")
+    st.title("🏌️‍♂️ Welcome to Tethered AI Golf Analysis")
+    st.markdown("---")
+    st.markdown("Select an analysis option below to explore fascinating golf statistics:")
     
     analysis_option = st.selectbox(
         "Choose Analysis Type:",
@@ -71,53 +73,63 @@ def landing_page():
         key="landing_select"
     )
     
+    st.markdown("---") # Add a separator for visual clarity
     return analysis_option
 
 # Amateur Handicap Analysis page
 def amateur_handicap_analysis():
     df = load_data("Handicap Stats.csv") # Assuming Handicap Stats.csv is in the root
     
-    st.title("Tethered AI Golf Data Analysis")
-    st.header("Amateur Golf Handicap Statistics")
+    st.title("📊 Amateur Golf Handicap Statistics")
+    st.markdown("Dive deep into your amateur golf performance and uncover insights to lower your handicap.")
+    st.markdown("---")
     
     # Organize layout with tabs
-    tab1, tab2, tab3 = st.tabs(["Overview", "Trends", "Comparisons"])
+    tab1, tab2, tab3 = st.tabs(["Overview", "Trends & Correlations", "Comparisons"])
     
     with tab1:
-        st.subheader("Select Handicap Index")
+        st.header("🎯 Your Handicap Snapshot")
+        st.markdown("Select your handicap index to see your personalized key metrics and tailored advice.")
         handicap_options = sorted(df["Handicap"].unique())  # Sort for better UX
         selected_handicap = st.selectbox("Choose a Handicap Index:", handicap_options, key="overview_select")
         filtered_df = df[df["Handicap"] == selected_handicap]
 
         # Display key metrics for all columns except 'Handicap'
-        st.subheader("Key Metrics")
+        st.subheader("Key Performance Indicators")
+        st.info(f"Displaying average metrics for golfers with a **{selected_handicap} handicap**.")
+        
         columns = df.columns[1:]  # Exclude the first column ('Handicap')
         num_columns = len(columns)
         num_cols_per_row = 4  # Number of metrics to display per row
-        for i in range(0, num_columns, num_cols_per_row):
-            cols = st.columns(num_cols_per_row)
-            for j, col_name in enumerate(columns[i:i + num_cols_per_row]):
-                with cols[j]:
-                    if col_name in filtered_df.columns and not filtered_df.empty:
-                        st.metric(col_name, f"{filtered_df[col_name].iloc[0]:.2f}")
-                    else:
-                        st.metric(col_name, "N/A")
+        
+        # Use st.container for a subtle visual grouping
+        with st.container(border=True): # Use border for a clean look
+            for i in range(0, num_columns, num_cols_per_row):
+                cols = st.columns(num_cols_per_row)
+                for j, col_name in enumerate(columns[i:i + num_cols_per_row]):
+                    with cols[j]:
+                        if col_name in filtered_df.columns and not filtered_df.empty:
+                            st.metric(col_name, f"{filtered_df[col_name].iloc[0]:.2f}")
+                        else:
+                            st.metric(col_name, "N/A")
 
         # Personalized Advice
         st.markdown("---")
+        st.header("💡 Personalized Improvement Advice")
         if selected_handicap:
             advice_text = generate_handicap_advice(df, selected_handicap)
-            st.markdown(advice_text)
+            st.markdown(advice_text, unsafe_allow_html=True) # Allow HTML for colored text
         else:
             st.info("Select a handicap index above to receive personalized improvement advice.")
 
     with tab2:
-        st.subheader("Trends Across Handicap Levels")
+        st.header("📈 Trends & Correlations Across Handicaps")
         st.markdown("""
-            These plots show how each golf metric changes across different handicap levels.
-            The charts are ordered by the **absolute strength of their correlation with Handicap**,
-            meaning metrics with the strongest impact (positive or negative) on handicap are shown first.
+            These plots illustrate how various golf metrics trend across different handicap levels.
+            Charts are ordered by the **absolute strength of their correlation with Handicap**,
+            highlighting metrics with the most significant impact on your score.
         """)
+        st.markdown("---")
 
         numerical_cols_for_trends = df.select_dtypes(include=['number']).columns.tolist()
         if 'Handicap' in numerical_cols_for_trends:
@@ -140,31 +152,43 @@ def amateur_handicap_analysis():
                     df,
                     x='Handicap',
                     y=metric,
-                    title=f"Trend: {metric} vs. Handicap (Abs. Correlation: {abs_corr:.2f})",
-                    labels={'Handicap': 'Handicap Index', metric: metric}
+                    title=f"Trend: **{metric}** vs. Handicap (Abs. Correlation: $${abs_corr:.2f}$$)", # Bold title and LaTeX for correlation
+                    labels={'Handicap': 'Handicap Index', metric: metric},
+                    template="plotly_white" # Use a clean template
                 )
-                fig_metric_trend.update_traces(mode='lines+markers')
-                fig_metric_trend.update_layout(hovermode="x unified")
+                fig_metric_trend.update_traces(mode='lines+markers', marker=dict(size=8, symbol='circle', line=dict(width=2, color='DarkSlateGrey')),
+                                            line=dict(width=3)) # Thicker lines, better markers
+                fig_metric_trend.update_layout(hovermode="x unified",
+                                              title_font_size=20,
+                                              xaxis_title_font_size=16,
+                                              yaxis_title_font_size=16) # Adjust font sizes
                 st.plotly_chart(fig_metric_trend, use_container_width=True)
         else:
             st.info("No numerical metrics available to plot trends by handicap.")
 
+        st.markdown("---")
         # Box plot for score distribution
-        st.subheader("Score Distribution Across All Handicaps")
+        st.subheader("⛳ Score Distribution Across All Handicaps")
         if 'Avg Score to Par' in df.columns:
             fig_box = px.box(
                 df,
                 x='Handicap',
                 y='Avg Score to Par',
-                title="Distribution of Average Score to Par by Handicap",
-                labels={'Avg Score to Par': 'Average Score to Par'}
+                title="Distribution of **Average Score to Par** by Handicap",
+                labels={'Avg Score to Par': 'Average Score to Par'},
+                template="plotly_white"
             )
+            fig_box.update_layout(title_font_size=20,
+                                  xaxis_title_font_size=16,
+                                  yaxis_title_font_size=16)
             st.plotly_chart(fig_box, use_container_width=True)
         else:
             st.warning("Column 'Avg Score to Par' not found for box plot.")
 
+        st.markdown("---")
         # Correlation heatmap
-        st.subheader("Overall Correlation Between Metrics")
+        st.subheader("🔥 Overall Correlation Between Metrics")
+        st.markdown("Understand how different golf metrics relate to each other.")
         numerical_df_for_heatmap = df.select_dtypes(include=['number'])
         if len(numerical_df_for_heatmap.columns) > 1:
             corr_matrix = numerical_df_for_heatmap.corr()
@@ -172,14 +196,17 @@ def amateur_handicap_analysis():
                 corr_matrix,
                 text_auto=True,
                 title="Correlation Heatmap of Golf Metrics",
-                labels=dict(x="Metric", y="Metric", color="Correlation")
+                labels=dict(x="Metric", y="Metric", color="Correlation"),
+                color_continuous_scale=px.colors.sequential.Viridis # Better color scale
             )
+            fig_heatmap.update_layout(title_font_size=20)
             st.plotly_chart(fig_heatmap, use_container_width=True)
         else:
             st.info("Not enough numerical columns to generate a meaningful correlation heatmap.")
 
     with tab3:
-        st.subheader("Compare Multiple Handicaps")
+        st.header("⚖️ Compare Multiple Handicaps")
+        st.markdown("Select two or more handicaps to compare their average performance across all metrics.")
         selected_handicaps = st.multiselect(
             "Select Handicaps to Compare:",
             handicap_options,
@@ -196,7 +223,6 @@ def amateur_handicap_analysis():
             metrics_to_plot = [col for col in df.columns[1:] if col != 'Handicap']
             filtered_melted_df = melted_compare_df[melted_compare_df['Metric'].isin(metrics_to_plot)]
 
-
             fig_compare = px.bar(
                 filtered_melted_df,
                 x='Handicap',
@@ -204,17 +230,22 @@ def amateur_handicap_analysis():
                 color='Metric',
                 barmode='group',
                 title="Comparison of Metrics Across Selected Handicaps",
-                labels={'value': 'Score', 'variable': 'Metric'}
+                labels={'value': 'Average Value', 'variable': 'Metric'},
+                template="plotly_white"
             )
-            fig_compare.update_layout(showlegend=True, legend_title_text='Metrics')
+            fig_compare.update_layout(showlegend=True, legend_title_text='Metrics',
+                                      title_font_size=20,
+                                      xaxis_title_font_size=16,
+                                      yaxis_title_font_size=16)
             st.plotly_chart(fig_compare, use_container_width=True)
 
-            st.subheader("Statistical Summary")
-            stats = compare_df[df.columns[1:]].describe()
-            st.dataframe(stats)
+            st.markdown("---")
+            st.subheader("Detailed Statistical Summary")
+            st.dataframe(compare_df[df.columns[1:]].describe().T.style.background_gradient(cmap='Blues')) # Styled dataframe
 
-            st.subheader("Download Data")
-            csv = compare_df.to_csv(index=False)
+            st.markdown("---")
+            st.subheader("📥 Download Compared Data")
+            csv = compare_df.to_csv(index=False).encode('utf-8') # Encode to utf-8 for download
             st.download_button(
                 label="Download Selected Data as CSV",
                 data=csv,
@@ -226,8 +257,9 @@ def amateur_handicap_analysis():
 
 # Professional Golf Tournament Analysis page
 def professional_golf_analysis():
-    st.title("Professional Golf Tournament Analysis")
-    st.markdown("Insights into professional golf tournament data using AI and Machine Learning.")
+    st.title("🏆 Professional Golf Tournament Analysis")
+    st.markdown("Harnessing the power of AI and Machine Learning to predict top performers in professional golf tournaments.")
+    st.markdown("---")
 
     preds_file_path = "Predictions/LR_Preds_2025-05-28.csv"
     preds_df = load_data(preds_file_path)
@@ -236,17 +268,21 @@ def professional_golf_analysis():
         # Display Tournament name at the top
         if 'Tournament' in preds_df.columns and not preds_df['Tournament'].empty:
             tournament_name = preds_df['Tournament'].iloc[0]
-            st.header(f"Tournament: {tournament_name}")
+            st.header(f"Tournament: **{tournament_name}**")
+            st.markdown("---")
 
-        st.subheader("Top 10 Player Predictions")
+        st.subheader("Top 10 Player Predictions for the Tournament")
+        st.success("These players are predicted to have the highest probability of performing well.")
         # Ensure 'Player' column exists
         if 'Player' in preds_df.columns:
             top_10_players = preds_df.head(10)[['Player']]
-            st.dataframe(top_10_players, hide_index=True)
+            st.dataframe(top_10_players.style.set_properties(**{'background-color': '#e6f3ff', 'color': 'black'}), hide_index=True) # Subtle blue background
         else:
             st.warning("The 'Player' column was not found in the predictions file.")
 
-        st.subheader("Highest Probability of Winning")
+        st.markdown("---")
+        st.subheader("Key Performance Indicators for Predicted Players")
+        st.info("Below are the historical performance indicators for the players with the highest winning probabilities. 'DNF' indicates Did Not Finish.")
         # Define the columns for the table, including the newly requested ones
         display_columns = [
             'Last T1 Finish',
@@ -264,18 +300,21 @@ def professional_golf_analysis():
             winning_prob_df = preds_df.set_index('Player')[display_columns]
 
             # Replace 100 with 'DNF' in the specified columns
-            # Ensure the columns are numeric before replacing if they are not already
             for col in ['Last T1 Finish', 'Last T2 Finish', 'Last T3 Finish', 'Previous_Year_Position']:
                 if col in winning_prob_df.columns:
                     winning_prob_df[col] = pd.to_numeric(winning_prob_df[col], errors='coerce')
                     winning_prob_df[col] = winning_prob_df[col].replace(100, 'DNF')
-
-            st.dataframe(winning_prob_df)
+            
+            st.dataframe(winning_prob_df.style.highlight_max(axis=0, subset=['Early_Rounds_Avg', 'Last_3_Early_Rounds_Avg'], color='lightgreen')
+                                           .highlight_min(axis=0, subset=['Early_Rounds_Avg', 'Last_3_Early_Rounds_Avg'], color='pink')
+                                           .set_properties(**{'text-align': 'center'})
+                                           .format({'Early_Rounds_Avg': "{:.2f}", 'Last_3_Early_Rounds_Avg': "{:.2f}"})
+                        )
         else:
             missing_cols = [col for col in display_columns if col not in preds_df.columns]
             st.warning(f"Missing one or more required columns for 'Highest Probability of Winning' table: {', '.join(missing_cols)}")
     else:
-        st.info("No professional golf predictions available at this time.")
+        st.info("No professional golf predictions available at this time. Please check back later!")
 
 
 # Main app logic
@@ -289,12 +328,26 @@ def main():
 
 # Sidebar explanatory text
 st.sidebar.markdown("""
-### About This App
-This app provides insights into golf performance data. Choose an analysis type from the dropdown menu on the landing page:
-
-- **Amateur Handicap Analysis**: Explore detailed statistics, trends, and comparisons for amateur golfers across different handicap levels.
-- **Professional Golf Tournament Analysis**: Coming soon! This section will provide insights into professional golf tournament data.
+### ℹ️ About This App
+This application, **Tethered AI Golf Analysis**, is designed to provide comprehensive insights into golf performance data using artificial intelligence and machine learning techniques.
 """)
+
+st.sidebar.markdown("""
+---
+**Choose an analysis type from the dropdown menu on the main page:**
+
+- **Amateur Handicap Analysis**: 
+    - Explore detailed statistics for amateur golfers across various handicap levels.
+    - Receive personalized advice based on strong correlations in the data to help reduce your handicap.
+    - Visualize trends and compare performance metrics between different handicap groups.
+
+- **Professional Golf Tournament Analysis**: 
+    - This section features AI-powered predictions and data breakdowns for professional golf tournaments, offering insights into top performers and predicted winners.
+""")
+
+st.sidebar.markdown("---")
+st.sidebar.info("Developed by Tethered AI")
+
 
 if __name__ == "__main__":
     main()
