@@ -84,12 +84,21 @@ def amateur_handicap_analysis():
     st.markdown("Dive deep into your amateur golf performance and uncover insights to lower your handicap.")
     st.markdown("---")
     
+    # --- MOVE THIS DEFINITION UP ---
+    # Define handicap_options here, BEFORE the tabs are created
+    handicap_options = sorted(df["Handicap"].unique())  # Sort for better UX
+
     # Organize layout with tabs
     tab1, tab2, tab3 = st.tabs(["Overview", "Trends & Correlations", "Comparisons"])
     
     with tab1:
-        # ... (tab1 code remains the same) ...
-        pass # Placeholder, your tab1 code is here
+        st.header("🎯 Your Handicap Snapshot")
+        st.markdown("Select your handicap index to see your personalized key metrics and tailored advice.")
+        # Removed: handicap_options = sorted(df["Handicap"].unique()) # This line was moved up
+        selected_handicap = st.selectbox("Choose a Handicap Index:", handicap_options, key="overview_select")
+        filtered_df = df[df["Handicap"] == selected_handicap]
+
+        # ... (rest of tab1 code remains the same) ...
 
     with tab2:
         # ... (tab2 code remains the same) ...
@@ -100,7 +109,7 @@ def amateur_handicap_analysis():
         st.markdown("Select two or more handicaps to compare their average performance across all metrics.")
         selected_handicaps = st.multiselect(
             "Select Handicaps to Compare:",
-            handicap_options, # handicap_options comes from df in tab1, ensure it's available
+            handicap_options, # Now handicap_options is correctly defined in this scope
             default=[handicap_options[0], handicap_options[-1]] if handicap_options else [],
             key="compare_select"
         )
