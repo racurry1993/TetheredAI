@@ -632,6 +632,7 @@ from datetime import datetime
 last_dw_update = datetime.today().strftime('%Y-%m-%d')
 predict_data = predict_data.sort_values('Preds', ascending=False)
 predict_data.to_csv(fr'C:\Users\rfo7799\Desktop\Git\TetheredAI\Predictions\LR_Preds_{last_dw_update}.csv')
+predict_data.to_csv(fr'C:\Users\rfo7799\Desktop\Git\TetheredAI\Predictions\LR_Preds_Active.csv')
 print(predict_data[['Player','Preds']].sort_values('Preds', ascending=False))
 
 ###############################################################################

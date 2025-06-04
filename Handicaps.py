@@ -271,7 +271,7 @@ def professional_golf_analysis():
     st.markdown("Harnessing the power of AI and Machine Learning to predict top performers in professional golf tournaments.")
     st.markdown("---")
 
-    preds_file_path = "Predictions/LR_Preds_2025-05-28.csv"
+    preds_file_path = f"Predictions/LR_Preds_Active.csv"
     preds_df = load_data(preds_file_path)
 
     if preds_df is not None and not preds_df.empty:
