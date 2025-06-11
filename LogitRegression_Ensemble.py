@@ -7,7 +7,7 @@ import os
 
 #os.chdir('Desktop')
 
-tournament_name = r'''RBC Canadian Open'''
+tournament_name = r'''U.S. Open'''
 
 os.chdir(r'C:\Users\rfo7799\Desktop\Git\TetheredAI')
 

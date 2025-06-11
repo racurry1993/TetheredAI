@@ -10,8 +10,8 @@ os.chdir(r'C:\Users\rfo7799\Desktop\Git\TetheredAI')
 #https://www.espn.com/golf/schedule
 
 #Manual Input Needed for Future Tournament
-tournament_name = '''RBC Canadian Open'''
-tournament_Id = '401703514'
+tournament_name = '''U.S. Open'''
+tournament_Id = '401703515'
 
 class ESPNGolfScraper:
     def __init__(self):
