@@ -1,0 +1,273 @@
+season,game_type,week,gameday,weekday,gametime,away_team,home_team,home_coach,away_coach,away_qb_id,home_qb_id,away_qb_name,home_qb_name,surface,away_rest,home_rest
+2025,REG,1,2025-09-04,Thursday,20:20,DAL,PHI,Nick Sirianni,Brian Schottenheimer,00-0033077,00-0036389,Dak Prescott,Jalen Hurts,grass,7,7
+2025,REG,1,2025-09-05,Friday,20:00,KC,LAC,Jim Harbaugh,Andy Reid,00-0033873,00-0036355,Patrick Mahomes,Justin Herbert,matrixturf,7,7
+2025,REG,1,2025-09-07,Sunday,13:00,TB,ATL,Raheem Morris,Todd Bowles,00-0034855,00-0039917,Baker Mayfield,Michael Penix,fieldturf,7,7
+2025,REG,1,2025-09-07,Sunday,13:00,CIN,CLE,Kevin Stefanski,Zac Taylor,00-0036442,00-0026158,Joe Burrow,Joe Flacco,grass,7,7
+2025,REG,1,2025-09-07,Sunday,13:00,MIA,IND,Shane Steichen,Mike McDaniel,00-0036212,00-0039164,Tua Tagovailoa,Anthony Richardson,fieldturf,7,7
+2025,REG,1,2025-09-07,Sunday,13:00,CAR,JAX,Liam Coen,Dave Canales,00-0039150,00-0036971,Bryce Young,Trevor Lawrence,grass,7,7
+2025,REG,1,2025-09-07,Sunday,13:00,LV,NE,Mike Vrabel,Pete Carroll,00-0030565,00-0039851,Geno Smith,Drake Maye,fieldturf,7,7
+2025,REG,1,2025-09-07,Sunday,13:00,ARI,NO,Kellen Moore,Jonathan Gannon,00-0035228,00-0039376,Kyler Murray,Spencer Rattler,sportturf,7,7
+2025,REG,1,2025-09-07,Sunday,13:00,PIT,NYJ,Aaron Glenn,Mike Tomlin,00-0023459,00-0036945,Aaron Rodgers,Justin Fields,fieldturf,7,7
+2025,REG,1,2025-09-07,Sunday,13:00,NYG,WAS,Dan Quinn,Brian Daboll,00-0029263,00-0039910,Russell Wilson,Jayden Daniels,grass,7,7
+2025,REG,1,2025-09-07,Sunday,16:05,TEN,DEN,Sean Payton,Brian Callahan,00-0040676,00-0039732,Cam Ward,Bo Nix,grass,7,7
+2025,REG,1,2025-09-07,Sunday,16:05,SF,SEA,Mike Macdonald,Kyle Shanahan,00-0037834,00-0034869,Brock Purdy,Sam Darnold,fieldturf,7,7
+2025,REG,1,2025-09-07,Sunday,16:25,DET,GB,Matt LaFleur,Dan Campbell,00-0033106,00-0036264,Jared Goff,Jordan Love,grass,7,7
+2025,REG,1,2025-09-07,Sunday,16:25,HOU,LA,Sean McVay,DeMeco Ryans,00-0039163,00-0026498,C.J. Stroud,Matthew Stafford,matrixturf,7,7
+2025,REG,1,2025-09-07,Sunday,20:20,BAL,BUF,Sean McDermott,John Harbaugh,00-0034796,00-0034857,Lamar Jackson,Josh Allen,a_turf,7,7
+2025,REG,1,2025-09-08,Monday,20:15,MIN,CHI,Ben Johnson,Kevin O'Connell,00-0039923,00-0039918,J.J. McCarthy,Caleb Williams,grass,7,7
+2025,REG,2,2025-09-11,Thursday,20:15,WAS,GB,Matt LaFleur,Dan Quinn,00-0039910,00-0036264,Jayden Daniels,Jordan Love,grass,4,4
+2025,REG,2,2025-09-14,Sunday,13:00,CLE,BAL,John Harbaugh,Kevin Stefanski,00-0026158,00-0034796,Joe Flacco,Lamar Jackson,grass,7,7
+2025,REG,2,2025-09-14,Sunday,13:00,JAX,CIN,Zac Taylor,Liam Coen,00-0036971,00-0036442,Trevor Lawrence,Joe Burrow,fieldturf,7,7
+2025,REG,2,2025-09-14,Sunday,13:00,NYG,DAL,Brian Schottenheimer,Brian Daboll,00-0029263,00-0033077,Russell Wilson,Dak Prescott,matrixturf,7,10
+2025,REG,2,2025-09-14,Sunday,13:00,CHI,DET,Dan Campbell,Ben Johnson,00-0039918,00-0033106,Caleb Williams,Jared Goff,fieldturf,6,7
+2025,REG,2,2025-09-14,Sunday,13:00,NE,MIA,Mike McDaniel,Mike Vrabel,00-0039851,00-0036212,Drake Maye,Tua Tagovailoa,grass,7,7
+2025,REG,2,2025-09-14,Sunday,13:00,SF,NO,Kellen Moore,Kyle Shanahan,00-0037834,00-0039376,Brock Purdy,Spencer Rattler,sportturf,7,7
+2025,REG,2,2025-09-14,Sunday,13:00,BUF,NYJ,Aaron Glenn,Sean McDermott,00-0034857,00-0036945,Josh Allen,Justin Fields,fieldturf,7,7
+2025,REG,2,2025-09-14,Sunday,13:00,SEA,PIT,Mike Tomlin,Mike Macdonald,00-0040673,00-0023459,Jalen Milroe,Aaron Rodgers,grass,7,7
+2025,REG,2,2025-09-14,Sunday,13:00,LA,TEN,Brian Callahan,Sean McVay,00-0026498,00-0040676,Matthew Stafford,Cam Ward,grass,7,7
+2025,REG,2,2025-09-14,Sunday,16:05,CAR,ARI,Jonathan Gannon,Dave Canales,00-0039150,00-0035228,Bryce Young,Kyler Murray,grass,7,7
+2025,REG,2,2025-09-14,Sunday,16:05,DEN,IND,Shane Steichen,Sean Payton,00-0039732,00-0039164,Bo Nix,Anthony Richardson,fieldturf,7,7
+2025,REG,2,2025-09-14,Sunday,16:25,PHI,KC,Andy Reid,Nick Sirianni,00-0036389,00-0033873,Jalen Hurts,Patrick Mahomes,grass,10,9
+2025,REG,2,2025-09-14,Sunday,20:20,ATL,MIN,Kevin O'Connell,Raheem Morris,00-0039917,00-0039923,Michael Penix,J.J. McCarthy,sportturf,7,6
+2025,REG,2,2025-09-15,Monday,19:00,TB,HOU,DeMeco Ryans,Todd Bowles,00-0034855,00-0039163,Baker Mayfield,C.J. Stroud,astroturf,8,8
+2025,REG,2,2025-09-15,Monday,22:00,LAC,LV,Pete Carroll,Jim Harbaugh,00-0036355,00-0030565,Justin Herbert,Geno Smith,grass,10,8
+2025,REG,3,2025-09-18,Thursday,20:15,MIA,BUF,Sean McDermott,Mike McDaniel,,,,,a_turf,4,4
+2025,REG,3,2025-09-21,Sunday,13:00,ATL,CAR,Dave Canales,Raheem Morris,,,,,grass,7,7
+2025,REG,3,2025-09-21,Sunday,13:00,GB,CLE,Kevin Stefanski,Matt LaFleur,,,,,grass,10,7
+2025,REG,3,2025-09-21,Sunday,13:00,HOU,JAX,Liam Coen,DeMeco Ryans,,,,,grass,6,7
+2025,REG,3,2025-09-21,Sunday,13:00,CIN,MIN,Kevin O'Connell,Zac Taylor,,,,,sportturf,7,7
+2025,REG,3,2025-09-21,Sunday,13:00,PIT,NE,Mike Vrabel,Mike Tomlin,,,,,fieldturf,7,7
+2025,REG,3,2025-09-21,Sunday,13:00,LA,PHI,Nick Sirianni,Sean McVay,,,,,grass,7,7
+2025,REG,3,2025-09-21,Sunday,13:00,NYJ,TB,Todd Bowles,Aaron Glenn,,,,,grass,7,6
+2025,REG,3,2025-09-21,Sunday,13:00,IND,TEN,Brian Callahan,Shane Steichen,,,,,grass,7,7
+2025,REG,3,2025-09-21,Sunday,13:00,LV,WAS,Dan Quinn,Pete Carroll,,,,,grass,6,10
+2025,REG,3,2025-09-21,Sunday,16:05,DEN,LAC,Jim Harbaugh,Sean Payton,,,,,matrixturf,7,6
+2025,REG,3,2025-09-21,Sunday,16:05,NO,SEA,Mike Macdonald,Kellen Moore,,,,,fieldturf,7,7
+2025,REG,3,2025-09-21,Sunday,16:25,DAL,CHI,Ben Johnson,Brian Schottenheimer,,,,,grass,7,7
+2025,REG,3,2025-09-21,Sunday,16:25,ARI,SF,Kyle Shanahan,Jonathan Gannon,,,,,grass,7,7
+2025,REG,3,2025-09-21,Sunday,20:20,KC,NYG,Brian Daboll,Andy Reid,,,,,fieldturf,7,7
+2025,REG,3,2025-09-22,Monday,20:15,DET,BAL,John Harbaugh,Dan Campbell,,,,,grass,8,8
+2025,REG,4,2025-09-25,Thursday,20:15,SEA,ARI,Jonathan Gannon,Mike Macdonald,,,,,grass,4,4
+2025,REG,4,2025-09-28,Sunday,09:30,MIN,PIT,Mike Tomlin,Kevin O'Connell,,,,,grass,7,7
+2025,REG,4,2025-09-28,Sunday,13:00,WAS,ATL,Raheem Morris,Dan Quinn,,,,,fieldturf,7,7
+2025,REG,4,2025-09-28,Sunday,13:00,NO,BUF,Sean McDermott,Kellen Moore,,,,,a_turf,7,10
+2025,REG,4,2025-09-28,Sunday,13:00,CLE,DET,Dan Campbell,Kevin Stefanski,,,,,fieldturf,7,6
+2025,REG,4,2025-09-28,Sunday,13:00,TEN,HOU,DeMeco Ryans,Brian Callahan,,,,,astroturf,7,7
+2025,REG,4,2025-09-28,Sunday,13:00,CAR,NE,Mike Vrabel,Dave Canales,,,,,fieldturf,7,7
+2025,REG,4,2025-09-28,Sunday,13:00,LAC,NYG,Brian Daboll,Jim Harbaugh,,,,,fieldturf,7,7
+2025,REG,4,2025-09-28,Sunday,13:00,PHI,TB,Todd Bowles,Nick Sirianni,,,,,grass,7,7
+2025,REG,4,2025-09-28,Sunday,16:05,IND,LA,Sean McVay,Shane Steichen,,,,,matrixturf,7,7
+2025,REG,4,2025-09-28,Sunday,16:05,JAX,SF,Kyle Shanahan,Liam Coen,,,,,grass,7,7
+2025,REG,4,2025-09-28,Sunday,16:25,BAL,KC,Andy Reid,John Harbaugh,,,,,grass,6,7
+2025,REG,4,2025-09-28,Sunday,16:25,CHI,LV,Pete Carroll,Ben Johnson,,,,,grass,7,7
+2025,REG,4,2025-09-28,Sunday,20:20,GB,DAL,Brian Schottenheimer,Matt LaFleur,,,,,matrixturf,7,7
+2025,REG,4,2025-09-29,Monday,19:15,NYJ,MIA,Mike McDaniel,Aaron Glenn,,,,,grass,8,11
+2025,REG,4,2025-09-29,Monday,20:15,CIN,DEN,Sean Payton,Zac Taylor,,,,,grass,8,8
+2025,REG,5,2025-10-02,Thursday,20:15,SF,LA,Sean McVay,Kyle Shanahan,,,,,matrixturf,4,4
+2025,REG,5,2025-10-05,Sunday,09:30,MIN,CLE,Kevin Stefanski,Kevin O'Connell,,,,,grass,7,7
+2025,REG,5,2025-10-05,Sunday,13:00,HOU,BAL,John Harbaugh,DeMeco Ryans,,,,,grass,7,7
+2025,REG,5,2025-10-05,Sunday,13:00,MIA,CAR,Dave Canales,Mike McDaniel,,,,,grass,6,7
+2025,REG,5,2025-10-05,Sunday,13:00,LV,IND,Shane Steichen,Pete Carroll,,,,,fieldturf,7,7
+2025,REG,5,2025-10-05,Sunday,13:00,NYG,NO,Kellen Moore,Brian Daboll,,,,,sportturf,7,7
+2025,REG,5,2025-10-05,Sunday,13:00,DAL,NYJ,Aaron Glenn,Brian Schottenheimer,,,,,fieldturf,7,6
+2025,REG,5,2025-10-05,Sunday,13:00,DEN,PHI,Nick Sirianni,Sean Payton,,,,,grass,6,7
+2025,REG,5,2025-10-05,Sunday,16:05,TEN,ARI,Jonathan Gannon,Brian Callahan,,,,,grass,7,10
+2025,REG,5,2025-10-05,Sunday,16:05,TB,SEA,Mike Macdonald,Todd Bowles,,,,,fieldturf,7,10
+2025,REG,5,2025-10-05,Sunday,16:25,DET,CIN,Zac Taylor,Dan Campbell,,,,,fieldturf,7,6
+2025,REG,5,2025-10-05,Sunday,16:25,WAS,LAC,Jim Harbaugh,Dan Quinn,,,,,matrixturf,7,7
+2025,REG,5,2025-10-05,Sunday,20:20,NE,BUF,Sean McDermott,Mike Vrabel,,,,,a_turf,7,7
+2025,REG,5,2025-10-06,Monday,20:15,KC,JAX,Liam Coen,Andy Reid,,,,,grass,8,8
+2025,REG,6,2025-10-09,Thursday,20:15,PHI,NYG,Brian Daboll,Nick Sirianni,,,,,fieldturf,4,4
+2025,REG,6,2025-10-12,Sunday,09:30,DEN,NYJ,Aaron Glenn,Sean Payton,,,,,fieldturf,7,7
+2025,REG,6,2025-10-12,Sunday,13:00,LA,BAL,John Harbaugh,Sean McVay,,,,,grass,10,7
+2025,REG,6,2025-10-12,Sunday,13:00,DAL,CAR,Dave Canales,Brian Schottenheimer,,,,,grass,7,7
+2025,REG,6,2025-10-12,Sunday,13:00,ARI,IND,Shane Steichen,Jonathan Gannon,,,,,fieldturf,7,7
+2025,REG,6,2025-10-12,Sunday,13:00,SEA,JAX,Liam Coen,Mike Macdonald,,,,,grass,7,6
+2025,REG,6,2025-10-12,Sunday,13:00,LAC,MIA,Mike McDaniel,Jim Harbaugh,,,,,grass,7,7
+2025,REG,6,2025-10-12,Sunday,13:00,CLE,PIT,Mike Tomlin,Kevin Stefanski,,,,,grass,7,14
+2025,REG,6,2025-10-12,Sunday,13:00,SF,TB,Todd Bowles,Kyle Shanahan,,,,,grass,10,7
+2025,REG,6,2025-10-12,Sunday,16:05,TEN,LV,Pete Carroll,Brian Callahan,,,,,grass,7,7
+2025,REG,6,2025-10-12,Sunday,16:25,CIN,GB,Matt LaFleur,Zac Taylor,,,,,grass,7,14
+2025,REG,6,2025-10-12,Sunday,16:25,NE,NO,Kellen Moore,Mike Vrabel,,,,,sportturf,7,7
+2025,REG,6,2025-10-12,Sunday,20:20,DET,KC,Andy Reid,Dan Campbell,,,,,grass,7,6
+2025,REG,6,2025-10-13,Monday,19:15,BUF,ATL,Raheem Morris,Sean McDermott,,,,,fieldturf,8,15
+2025,REG,6,2025-10-13,Monday,20:15,CHI,WAS,Dan Quinn,Ben Johnson,,,,,grass,15,8
+2025,REG,7,2025-10-16,Thursday,20:15,PIT,CIN,Zac Taylor,Mike Tomlin,,,,,fieldturf,4,4
+2025,REG,7,2025-10-19,Sunday,09:30,LA,JAX,Liam Coen,Sean McVay,,,,,grass,7,7
+2025,REG,7,2025-10-19,Sunday,13:00,NO,CHI,Ben Johnson,Kellen Moore,,,,,grass,7,6
+2025,REG,7,2025-10-19,Sunday,13:00,MIA,CLE,Kevin Stefanski,Mike McDaniel,,,,,grass,7,7
+2025,REG,7,2025-10-19,Sunday,13:00,LV,KC,Andy Reid,Pete Carroll,,,,,grass,7,7
+2025,REG,7,2025-10-19,Sunday,13:00,PHI,MIN,Kevin O'Connell,Nick Sirianni,,,,,sportturf,10,14
+2025,REG,7,2025-10-19,Sunday,13:00,CAR,NYJ,Aaron Glenn,Dave Canales,,,,,fieldturf,7,7
+2025,REG,7,2025-10-19,Sunday,13:00,NE,TEN,Brian Callahan,Mike Vrabel,,,,,grass,7,7
+2025,REG,7,2025-10-19,Sunday,16:05,NYG,DEN,Sean Payton,Brian Daboll,,,,,grass,10,7
+2025,REG,7,2025-10-19,Sunday,16:05,IND,LAC,Jim Harbaugh,Shane Steichen,,,,,matrixturf,7,7
+2025,REG,7,2025-10-19,Sunday,16:25,GB,ARI,Jonathan Gannon,Matt LaFleur,,,,,grass,7,7
+2025,REG,7,2025-10-19,Sunday,16:25,WAS,DAL,Brian Schottenheimer,Dan Quinn,,,,,matrixturf,6,7
+2025,REG,7,2025-10-19,Sunday,20:20,ATL,SF,Kyle Shanahan,Raheem Morris,,,,,grass,6,7
+2025,REG,7,2025-10-20,Monday,19:00,TB,DET,Dan Campbell,Todd Bowles,,,,,fieldturf,8,8
+2025,REG,7,2025-10-20,Monday,22:00,HOU,SEA,Mike Macdonald,DeMeco Ryans,,,,,fieldturf,15,8
+2025,REG,8,2025-10-23,Thursday,20:15,MIN,LAC,Jim Harbaugh,Kevin O'Connell,,,,,matrixturf,4,4
+2025,REG,8,2025-10-26,Sunday,13:00,MIA,ATL,Raheem Morris,Mike McDaniel,,,,,fieldturf,7,7
+2025,REG,8,2025-10-26,Sunday,13:00,CHI,BAL,John Harbaugh,Ben Johnson,,,,,grass,7,14
+2025,REG,8,2025-10-26,Sunday,13:00,BUF,CAR,Dave Canales,Sean McDermott,,,,,grass,13,7
+2025,REG,8,2025-10-26,Sunday,13:00,NYJ,CIN,Zac Taylor,Aaron Glenn,,,,,fieldturf,7,10
+2025,REG,8,2025-10-26,Sunday,13:00,SF,HOU,DeMeco Ryans,Kyle Shanahan,,,,,astroturf,7,6
+2025,REG,8,2025-10-26,Sunday,13:00,CLE,NE,Mike Vrabel,Kevin Stefanski,,,,,fieldturf,7,7
+2025,REG,8,2025-10-26,Sunday,13:00,NYG,PHI,Nick Sirianni,Brian Daboll,,,,,grass,7,7
+2025,REG,8,2025-10-26,Sunday,16:05,TB,NO,Kellen Moore,Todd Bowles,,,,,sportturf,6,7
+2025,REG,8,2025-10-26,Sunday,16:25,DAL,DEN,Sean Payton,Brian Schottenheimer,,,,,grass,7,7
+2025,REG,8,2025-10-26,Sunday,16:25,TEN,IND,Shane Steichen,Brian Callahan,,,,,fieldturf,7,7
+2025,REG,8,2025-10-26,Sunday,20:20,GB,PIT,Mike Tomlin,Matt LaFleur,,,,,grass,7,10
+2025,REG,8,2025-10-27,Monday,20:15,WAS,KC,Andy Reid,Dan Quinn,,,,,grass,8,8
+2025,REG,9,2025-10-30,Thursday,20:15,BAL,MIA,Mike McDaniel,John Harbaugh,,,,,grass,4,4
+2025,REG,9,2025-11-02,Sunday,13:00,CHI,CIN,Zac Taylor,Ben Johnson,,,,,fieldturf,7,7
+2025,REG,9,2025-11-02,Sunday,13:00,MIN,DET,Dan Campbell,Kevin O'Connell,,,,,fieldturf,10,13
+2025,REG,9,2025-11-02,Sunday,13:00,CAR,GB,Matt LaFleur,Dave Canales,,,,,grass,7,7
+2025,REG,9,2025-11-02,Sunday,13:00,DEN,HOU,DeMeco Ryans,Sean Payton,,,,,astroturf,7,7
+2025,REG,9,2025-11-02,Sunday,13:00,ATL,NE,Mike Vrabel,Raheem Morris,,,,,fieldturf,7,7
+2025,REG,9,2025-11-02,Sunday,13:00,SF,NYG,Brian Daboll,Kyle Shanahan,,,,,fieldturf,7,7
+2025,REG,9,2025-11-02,Sunday,13:00,IND,PIT,Mike Tomlin,Shane Steichen,,,,,grass,7,7
+2025,REG,9,2025-11-02,Sunday,13:00,LAC,TEN,Brian Callahan,Jim Harbaugh,,,,,grass,10,7
+2025,REG,9,2025-11-02,Sunday,16:05,NO,LA,Sean McVay,Kellen Moore,,,,,matrixturf,7,14
+2025,REG,9,2025-11-02,Sunday,16:05,JAX,LV,Pete Carroll,Liam Coen,,,,,grass,14,14
+2025,REG,9,2025-11-02,Sunday,16:25,KC,BUF,Sean McDermott,Andy Reid,,,,,a_turf,6,7
+2025,REG,9,2025-11-02,Sunday,20:20,SEA,WAS,Dan Quinn,Mike Macdonald,,,,,grass,13,6
+2025,REG,9,2025-11-03,Monday,20:15,ARI,DAL,Brian Schottenheimer,Jonathan Gannon,,,,,matrixturf,15,8
+2025,REG,10,2025-11-06,Thursday,20:15,LV,DEN,Sean Payton,Pete Carroll,,,,,grass,4,4
+2025,REG,10,2025-11-09,Sunday,09:30,ATL,IND,Shane Steichen,Raheem Morris,,,,,fieldturf,7,7
+2025,REG,10,2025-11-09,Sunday,13:00,NO,CAR,Dave Canales,Kellen Moore,,,,,grass,7,7
+2025,REG,10,2025-11-09,Sunday,13:00,NYG,CHI,Ben Johnson,Brian Daboll,,,,,grass,7,7
+2025,REG,10,2025-11-09,Sunday,13:00,JAX,HOU,DeMeco Ryans,Liam Coen,,,,,astroturf,7,7
+2025,REG,10,2025-11-09,Sunday,13:00,BUF,MIA,Mike McDaniel,Sean McDermott,,,,,grass,7,10
+2025,REG,10,2025-11-09,Sunday,13:00,BAL,MIN,Kevin O'Connell,John Harbaugh,,,,,sportturf,10,7
+2025,REG,10,2025-11-09,Sunday,13:00,CLE,NYJ,Aaron Glenn,Kevin Stefanski,,,,,fieldturf,14,14
+2025,REG,10,2025-11-09,Sunday,13:00,NE,TB,Todd Bowles,Mike Vrabel,,,,,grass,7,14
+2025,REG,10,2025-11-09,Sunday,16:05,ARI,SEA,Mike Macdonald,Jonathan Gannon,,,,,fieldturf,6,7
+2025,REG,10,2025-11-09,Sunday,16:25,LA,SF,Kyle Shanahan,Sean McVay,,,,,grass,7,7
+2025,REG,10,2025-11-09,Sunday,16:25,DET,WAS,Dan Quinn,Dan Campbell,,,,,grass,7,7
+2025,REG,10,2025-11-09,Sunday,20:20,PIT,LAC,Jim Harbaugh,Mike Tomlin,,,,,matrixturf,7,7
+2025,REG,10,2025-11-10,Monday,20:15,PHI,GB,Matt LaFleur,Nick Sirianni,,,,,grass,15,8
+2025,REG,11,2025-11-13,Thursday,20:15,NYJ,NE,Mike Vrabel,Aaron Glenn,,,,,fieldturf,4,4
+2025,REG,11,2025-11-16,Sunday,09:30,WAS,MIA,Mike McDaniel,Dan Quinn,,,,,grass,7,7
+2025,REG,11,2025-11-16,Sunday,13:00,CAR,ATL,Raheem Morris,Dave Canales,,,,,fieldturf,7,7
+2025,REG,11,2025-11-16,Sunday,13:00,TB,BUF,Sean McDermott,Todd Bowles,,,,,a_turf,7,7
+2025,REG,11,2025-11-16,Sunday,13:00,LAC,JAX,Liam Coen,Jim Harbaugh,,,,,grass,7,7
+2025,REG,11,2025-11-16,Sunday,13:00,CHI,MIN,Kevin O'Connell,Ben Johnson,,,,,sportturf,7,7
+2025,REG,11,2025-11-16,Sunday,13:00,GB,NYG,Brian Daboll,Matt LaFleur,,,,,fieldturf,6,7
+2025,REG,11,2025-11-16,Sunday,13:00,CIN,PIT,Mike Tomlin,Zac Taylor,,,,,grass,14,7
+2025,REG,11,2025-11-16,Sunday,13:00,HOU,TEN,Brian Callahan,DeMeco Ryans,,,,,grass,7,14
+2025,REG,11,2025-11-16,Sunday,16:05,SF,ARI,Jonathan Gannon,Kyle Shanahan,,,,,grass,7,7
+2025,REG,11,2025-11-16,Sunday,16:05,SEA,LA,Sean McVay,Mike Macdonald,,,,,matrixturf,7,7
+2025,REG,11,2025-11-16,Sunday,16:25,BAL,CLE,Kevin Stefanski,John Harbaugh,,,,,grass,7,7
+2025,REG,11,2025-11-16,Sunday,16:25,KC,DEN,Sean Payton,Andy Reid,,,,,grass,14,10
+2025,REG,11,2025-11-16,Sunday,20:20,DET,PHI,Nick Sirianni,Dan Campbell,,,,,grass,7,6
+2025,REG,11,2025-11-17,Monday,20:15,DAL,LV,Pete Carroll,Brian Schottenheimer,,,,,grass,14,11
+2025,REG,12,2025-11-20,Thursday,20:15,BUF,HOU,DeMeco Ryans,Sean McDermott,,,,,astroturf,4,4
+2025,REG,12,2025-11-23,Sunday,13:00,NYJ,BAL,John Harbaugh,Aaron Glenn,,,,,grass,10,7
+2025,REG,12,2025-11-23,Sunday,13:00,PIT,CHI,Ben Johnson,Mike Tomlin,,,,,grass,7,7
+2025,REG,12,2025-11-23,Sunday,13:00,NE,CIN,Zac Taylor,Mike Vrabel,,,,,fieldturf,10,7
+2025,REG,12,2025-11-23,Sunday,13:00,NYG,DET,Dan Campbell,Brian Daboll,,,,,fieldturf,7,7
+2025,REG,12,2025-11-23,Sunday,13:00,MIN,GB,Matt LaFleur,Kevin O'Connell,,,,,grass,7,7
+2025,REG,12,2025-11-23,Sunday,13:00,IND,KC,Andy Reid,Shane Steichen,,,,,grass,14,7
+2025,REG,12,2025-11-23,Sunday,13:00,SEA,TEN,Brian Callahan,Mike Macdonald,,,,,grass,7,7
+2025,REG,12,2025-11-23,Sunday,16:05,JAX,ARI,Jonathan Gannon,Liam Coen,,,,,grass,7,7
+2025,REG,12,2025-11-23,Sunday,16:05,CLE,LV,Pete Carroll,Kevin Stefanski,,,,,grass,7,6
+2025,REG,12,2025-11-23,Sunday,16:25,PHI,DAL,Brian Schottenheimer,Nick Sirianni,,,,,matrixturf,7,6
+2025,REG,12,2025-11-23,Sunday,16:25,ATL,NO,Kellen Moore,Raheem Morris,,,,,sportturf,7,14
+2025,REG,12,2025-11-23,Sunday,20:20,TB,LA,Sean McVay,Todd Bowles,,,,,matrixturf,7,7
+2025,REG,12,2025-11-24,Monday,20:15,CAR,SF,Kyle Shanahan,Dave Canales,,,,,grass,8,8
+2025,REG,13,2025-11-27,Thursday,13:00,GB,DET,Dan Campbell,Matt LaFleur,,,,,fieldturf,4,4
+2025,REG,13,2025-11-27,Thursday,16:30,KC,DAL,Brian Schottenheimer,Andy Reid,,,,,matrixturf,4,4
+2025,REG,13,2025-11-27,Thursday,20:20,CIN,BAL,John Harbaugh,Zac Taylor,,,,,grass,4,4
+2025,REG,13,2025-11-28,Friday,15:00,CHI,PHI,Nick Sirianni,Ben Johnson,,,,,grass,5,5
+2025,REG,13,2025-11-30,Sunday,13:00,LA,CAR,Dave Canales,Sean McVay,,,,,grass,7,6
+2025,REG,13,2025-11-30,Sunday,13:00,SF,CLE,Kevin Stefanski,Kyle Shanahan,,,,,grass,6,7
+2025,REG,13,2025-11-30,Sunday,13:00,HOU,IND,Shane Steichen,DeMeco Ryans,,,,,fieldturf,10,7
+2025,REG,13,2025-11-30,Sunday,13:00,NO,MIA,Mike McDaniel,Kellen Moore,,,,,grass,7,14
+2025,REG,13,2025-11-30,Sunday,13:00,ATL,NYJ,Aaron Glenn,Raheem Morris,,,,,fieldturf,7,7
+2025,REG,13,2025-11-30,Sunday,13:00,ARI,TB,Todd Bowles,Jonathan Gannon,,,,,grass,7,7
+2025,REG,13,2025-11-30,Sunday,13:00,JAX,TEN,Brian Callahan,Liam Coen,,,,,grass,7,7
+2025,REG,13,2025-11-30,Sunday,16:05,MIN,SEA,Mike Macdonald,Kevin O'Connell,,,,,fieldturf,7,7
+2025,REG,13,2025-11-30,Sunday,16:25,LV,LAC,Jim Harbaugh,Pete Carroll,,,,,matrixturf,7,14
+2025,REG,13,2025-11-30,Sunday,16:25,BUF,PIT,Mike Tomlin,Sean McDermott,,,,,grass,10,7
+2025,REG,13,2025-11-30,Sunday,20:20,DEN,WAS,Dan Quinn,Sean Payton,,,,,grass,14,14
+2025,REG,13,2025-12-01,Monday,20:15,NYG,NE,Mike Vrabel,Brian Daboll,,,,,fieldturf,8,8
+2025,REG,14,2025-12-04,Thursday,20:15,DAL,DET,Dan Campbell,Brian Schottenheimer,,,,,fieldturf,7,7
+2025,REG,14,2025-12-07,Sunday,13:00,SEA,ATL,Raheem Morris,Mike Macdonald,,,,,fieldturf,7,7
+2025,REG,14,2025-12-07,Sunday,13:00,PIT,BAL,John Harbaugh,Mike Tomlin,,,,,grass,7,10
+2025,REG,14,2025-12-07,Sunday,13:00,TEN,CLE,Kevin Stefanski,Brian Callahan,,,,,grass,7,7
+2025,REG,14,2025-12-07,Sunday,13:00,CHI,GB,Matt LaFleur,Ben Johnson,,,,,grass,9,10
+2025,REG,14,2025-12-07,Sunday,13:00,IND,JAX,Liam Coen,Shane Steichen,,,,,grass,7,7
+2025,REG,14,2025-12-07,Sunday,13:00,WAS,MIN,Kevin O'Connell,Dan Quinn,,,,,sportturf,7,7
+2025,REG,14,2025-12-07,Sunday,13:00,MIA,NYJ,Aaron Glenn,Mike McDaniel,,,,,fieldturf,7,7
+2025,REG,14,2025-12-07,Sunday,13:00,NO,TB,Todd Bowles,Kellen Moore,,,,,grass,7,7
+2025,REG,14,2025-12-07,Sunday,16:05,DEN,LV,Pete Carroll,Sean Payton,,,,,grass,7,7
+2025,REG,14,2025-12-07,Sunday,16:25,LA,ARI,Jonathan Gannon,Sean McVay,,,,,grass,7,7
+2025,REG,14,2025-12-07,Sunday,16:25,CIN,BUF,Sean McDermott,Zac Taylor,,,,,a_turf,10,7
+2025,REG,14,2025-12-07,Sunday,20:20,HOU,KC,Andy Reid,DeMeco Ryans,,,,,grass,7,10
+2025,REG,14,2025-12-08,Monday,20:15,PHI,LAC,Jim Harbaugh,Nick Sirianni,,,,,matrixturf,10,8
+2025,REG,15,2025-12-11,Thursday,20:15,ATL,TB,Todd Bowles,Raheem Morris,,,,,grass,4,4
+2025,REG,15,2025-12-14,Sunday,13:00,CLE,CHI,Ben Johnson,Kevin Stefanski,,,,,grass,7,7
+2025,REG,15,2025-12-14,Sunday,13:00,BAL,CIN,Zac Taylor,John Harbaugh,,,,,fieldturf,7,7
+2025,REG,15,2025-12-14,Sunday,13:00,ARI,HOU,DeMeco Ryans,Jonathan Gannon,,,,,astroturf,7,7
+2025,REG,15,2025-12-14,Sunday,13:00,NYJ,JAX,Liam Coen,Aaron Glenn,,,,,grass,7,7
+2025,REG,15,2025-12-14,Sunday,13:00,LAC,KC,Andy Reid,Jim Harbaugh,,,,,grass,6,7
+2025,REG,15,2025-12-14,Sunday,13:00,BUF,NE,Mike Vrabel,Sean McDermott,,,,,fieldturf,7,13
+2025,REG,15,2025-12-14,Sunday,13:00,WAS,NYG,Brian Daboll,Dan Quinn,,,,,fieldturf,7,13
+2025,REG,15,2025-12-14,Sunday,13:00,LV,PHI,Nick Sirianni,Pete Carroll,,,,,grass,7,6
+2025,REG,15,2025-12-14,Sunday,16:25,GB,DEN,Sean Payton,Matt LaFleur,,,,,grass,7,7
+2025,REG,15,2025-12-14,Sunday,16:25,DET,LA,Sean McVay,Dan Campbell,,,,,matrixturf,10,7
+2025,REG,15,2025-12-14,Sunday,16:25,CAR,NO,Kellen Moore,Dave Canales,,,,,sportturf,14,7
+2025,REG,15,2025-12-14,Sunday,16:25,IND,SEA,Mike Macdonald,Shane Steichen,,,,,fieldturf,7,7
+2025,REG,15,2025-12-14,Sunday,16:25,TEN,SF,Kyle Shanahan,Brian Callahan,,,,,grass,7,14
+2025,REG,15,2025-12-14,Sunday,20:20,MIN,DAL,Brian Schottenheimer,Kevin O'Connell,,,,,matrixturf,7,10
+2025,REG,15,2025-12-15,Monday,20:15,MIA,PIT,Mike Tomlin,Mike McDaniel,,,,,grass,8,8
+2025,REG,16,2025-12-18,Thursday,20:15,LA,SEA,Mike Macdonald,Sean McVay,,,,,fieldturf,4,4
+2025,REG,16,2025-12-19,Friday,13:00,GB,CHI,Ben Johnson,Matt LaFleur,,,,,grass,5,5
+2025,REG,16,2025-12-19,Friday,13:00,PHI,WAS,Dan Quinn,Nick Sirianni,,,,,grass,5,5
+2025,REG,16,2025-12-21,Sunday,13:00,NE,BAL,John Harbaugh,Mike Vrabel,,,,,grass,7,7
+2025,REG,16,2025-12-21,Sunday,13:00,TB,CAR,Dave Canales,Todd Bowles,,,,,grass,10,7
+2025,REG,16,2025-12-21,Sunday,13:00,BUF,CLE,Kevin Stefanski,Sean McDermott,,,,,grass,7,7
+2025,REG,16,2025-12-21,Sunday,13:00,LAC,DAL,Brian Schottenheimer,Jim Harbaugh,,,,,matrixturf,7,7
+2025,REG,16,2025-12-21,Sunday,13:00,NYJ,NO,Kellen Moore,Aaron Glenn,,,,,sportturf,7,7
+2025,REG,16,2025-12-21,Sunday,13:00,MIN,NYG,Brian Daboll,Kevin O'Connell,,,,,fieldturf,7,7
+2025,REG,16,2025-12-21,Sunday,13:00,KC,TEN,Brian Callahan,Andy Reid,,,,,grass,7,7
+2025,REG,16,2025-12-21,Sunday,16:05,ATL,ARI,Jonathan Gannon,Raheem Morris,,,,,grass,10,7
+2025,REG,16,2025-12-21,Sunday,16:05,JAX,DEN,Sean Payton,Liam Coen,,,,,grass,7,7
+2025,REG,16,2025-12-21,Sunday,16:25,PIT,DET,Dan Campbell,Mike Tomlin,,,,,fieldturf,6,7
+2025,REG,16,2025-12-21,Sunday,16:25,LV,HOU,DeMeco Ryans,Pete Carroll,,,,,astroturf,7,7
+2025,REG,16,2025-12-21,Sunday,20:20,CIN,MIA,Mike McDaniel,Zac Taylor,,,,,grass,7,6
+2025,REG,16,2025-12-22,Monday,20:15,SF,IND,Shane Steichen,Kyle Shanahan,,,,,fieldturf,8,8
+2025,REG,17,2025-12-25,Thursday,13:00,DAL,WAS,Dan Quinn,Brian Schottenheimer,,,,,grass,4,6
+2025,REG,17,2025-12-25,Thursday,16:30,DET,MIN,Kevin O'Connell,Dan Campbell,,,,,sportturf,4,4
+2025,REG,17,2025-12-25,Thursday,20:15,DEN,KC,Andy Reid,Sean Payton,,,,,grass,4,4
+2025,REG,17,2025-12-28,Sunday,13:00,SEA,CAR,Dave Canales,Mike Macdonald,,,,,grass,10,7
+2025,REG,17,2025-12-28,Sunday,13:00,ARI,CIN,Zac Taylor,Jonathan Gannon,,,,,fieldturf,7,7
+2025,REG,17,2025-12-28,Sunday,13:00,PIT,CLE,Kevin Stefanski,Mike Tomlin,,,,,grass,7,7
+2025,REG,17,2025-12-28,Sunday,13:00,BAL,GB,Matt LaFleur,John Harbaugh,,,,,grass,7,9
+2025,REG,17,2025-12-28,Sunday,13:00,JAX,IND,Shane Steichen,Liam Coen,,,,,fieldturf,7,6
+2025,REG,17,2025-12-28,Sunday,13:00,HOU,LAC,Jim Harbaugh,DeMeco Ryans,,,,,matrixturf,7,7
+2025,REG,17,2025-12-28,Sunday,13:00,NYG,LV,Pete Carroll,Brian Daboll,,,,,grass,7,7
+2025,REG,17,2025-12-28,Sunday,13:00,TB,MIA,Mike McDaniel,Todd Bowles,,,,,grass,7,7
+2025,REG,17,2025-12-28,Sunday,13:00,NE,NYJ,Aaron Glenn,Mike Vrabel,,,,,fieldturf,7,7
+2025,REG,17,2025-12-28,Sunday,13:00,NO,TEN,Brian Callahan,Kellen Moore,,,,,grass,7,7
+2025,REG,17,2025-12-28,Sunday,16:25,PHI,BUF,Sean McDermott,Nick Sirianni,,,,,a_turf,9,7
+2025,REG,17,2025-12-28,Sunday,20:20,CHI,SF,Kyle Shanahan,Ben Johnson,,,,,grass,9,6
+2025,REG,17,2025-12-29,Monday,20:15,LA,ATL,Raheem Morris,Sean McVay,,,,,fieldturf,11,8
+2025,REG,18,2026-01-04,Sunday,13:00,NO,ATL,Raheem Morris,Kellen Moore,,,,,fieldturf,6,6
+2025,REG,18,2026-01-04,Sunday,13:00,NYJ,BUF,Sean McDermott,Aaron Glenn,,,,,a_turf,6,6
+2025,REG,18,2026-01-04,Sunday,13:00,DET,CHI,Ben Johnson,Dan Campbell,,,,,grass,5,9
+2025,REG,18,2026-01-04,Sunday,13:00,CLE,CIN,Zac Taylor,Kevin Stefanski,,,,,fieldturf,6,7
+2025,REG,18,2026-01-04,Sunday,13:00,LAC,DEN,Sean Payton,Jim Harbaugh,,,,,grass,7,7
+2025,REG,18,2026-01-04,Sunday,13:00,IND,HOU,DeMeco Ryans,Shane Steichen,,,,,astroturf,6,10
+2025,REG,18,2026-01-04,Sunday,13:00,TEN,JAX,Liam Coen,Brian Callahan,,,,,grass,6,6
+2025,REG,18,2026-01-04,Sunday,13:00,ARI,LA,Sean McVay,Jonathan Gannon,,,,,matrixturf,7,7
+2025,REG,18,2026-01-04,Sunday,13:00,KC,LV,Pete Carroll,Andy Reid,,,,,grass,10,6
+2025,REG,18,2026-01-04,Sunday,13:00,GB,MIN,Kevin O'Connell,Matt LaFleur,,,,,sportturf,6,6
+2025,REG,18,2026-01-04,Sunday,13:00,MIA,NE,Mike Vrabel,Mike McDaniel,,,,,fieldturf,6,7
+2025,REG,18,2026-01-04,Sunday,13:00,DAL,NYG,Brian Daboll,Brian Schottenheimer,,,,,fieldturf,6,6
+2025,REG,18,2026-01-04,Sunday,13:00,WAS,PHI,Nick Sirianni,Dan Quinn,,,,,grass,6,6
+2025,REG,18,2026-01-04,Sunday,13:00,BAL,PIT,Mike Tomlin,John Harbaugh,,,,,grass,10,10
+2025,REG,18,2026-01-04,Sunday,13:00,SEA,SF,Kyle Shanahan,Mike Macdonald,,,,,grass,9,5
+2025,REG,18,2026-01-04,Sunday,13:00,CAR,TB,Todd Bowles,Dave Canales,,,,,grass,6,6
