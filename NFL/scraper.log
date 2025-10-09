@@ -128,3 +128,142 @@
 2025-09-24 16:13:34 - INFO - Excel file 'player_props.xlsx' has been created with filters, sorting, and adjusted column widths.
 2025-09-24 16:13:34 - INFO - Processing completed in 0:00:05.071274.
 2025-09-24 16:13:34 - INFO - Quota Used: 127
+2025-10-09 12:16:54 - INFO - Processing started.
+2025-10-09 12:17:00 - ERROR - HTTP error occurred while fetching events: 401 Client Error: Unauthorized for url: https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events?apiKey=S4ZA-R74M-Q5NT-ZTEG
+2025-10-09 12:17:00 - INFO - Removed commenced games from the database.
+2025-10-09 12:17:00 - INFO - HTML file with combined bets has been saved as 'index.html'
+2025-10-09 12:17:00 - ERROR - Error saving Excel file: 'is_favorable'
+2025-10-09 12:17:00 - INFO - Processing completed in 0:00:05.288171.
+2025-10-09 12:17:00 - INFO - Quota Used: 0
+2025-10-09 12:20:52 - INFO - Processing started.
+2025-10-09 12:20:52 - INFO - Fetched and filtered 30 events for sport: americanfootball_nfl
+2025-10-09 12:20:53 - INFO - Stored props for event ID: e10fe83ee6178a598e7fa84ea0913366
+2025-10-09 12:20:53 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:20:53 - INFO - Stored props for event ID: e34812ee7fbf13bd75e4298bccfbdd10
+2025-10-09 12:20:53 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:20:54 - INFO - Stored props for event ID: e5dd1fed586cfc0ec2d7c06f2a02c37a
+2025-10-09 12:20:54 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:20:54 - INFO - Stored props for event ID: f2c642e1f95555424b9a9a4f03733b42
+2025-10-09 12:20:54 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:20:54 - INFO - Stored props for event ID: dfa87b0532de1389297103c2e3195347
+2025-10-09 12:20:54 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:20:55 - INFO - Stored props for event ID: b235bc78609644cb28492cc1d6ad69fd
+2025-10-09 12:20:55 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:20:55 - INFO - Stored props for event ID: dd3a14fa1529e79bd338a7bfd71d5b3a
+2025-10-09 12:20:55 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:20:56 - INFO - Stored props for event ID: a11bbccb332241029ebaeb519b93b776
+2025-10-09 12:20:56 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:20:56 - INFO - Stored props for event ID: a7211a87bbd5fb2ee473eb9c93ee2e68
+2025-10-09 12:20:56 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:20:56 - INFO - Stored props for event ID: 4963bff460a5f26cab46a8e5ea6db148
+2025-10-09 12:20:56 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:20:57 - INFO - Stored props for event ID: 0c85b0939650e29689bb2651b33522eb
+2025-10-09 12:20:57 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:20:57 - INFO - Stored props for event ID: 9e705d669039f2ca8364f408b7792a8a
+2025-10-09 12:20:57 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:20:58 - INFO - Stored props for event ID: 82e432d5d8bc0b5a6cbe0c324de90de3
+2025-10-09 12:20:58 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:20:58 - INFO - Stored props for event ID: 33e0adf378d2856ffe5f8452e7d5512d
+2025-10-09 12:20:58 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:20:58 - INFO - Stored props for event ID: 38366aa83a3eb6cef71a1134c4fceb2c
+2025-10-09 12:20:58 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:20:59 - INFO - Stored props for event ID: 6076f9eab496770efc0ab7095b27c122
+2025-10-09 12:20:59 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:20:59 - INFO - Stored props for event ID: 79de65f1b97c9145ebdcb019eb486500
+2025-10-09 12:20:59 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:21:00 - INFO - Stored props for event ID: ba4e8bfa1f4eeaa74c7b09f409361c0d
+2025-10-09 12:21:00 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:21:00 - INFO - Stored props for event ID: 8f06a4b503cc7309cb0df4a8b67f9930
+2025-10-09 12:21:00 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:21:00 - INFO - Stored props for event ID: f0336c9a3749716250afba387d157377
+2025-10-09 12:21:00 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:21:01 - INFO - Stored props for event ID: 3127c0dd6ed51a44354af51791bc3e5a
+2025-10-09 12:21:01 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:21:01 - INFO - Stored props for event ID: 6a8d2daf7f75100d02656bc0217737e8
+2025-10-09 12:21:01 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:21:02 - INFO - Stored props for event ID: f7fa9341eeffb08f7e6e769398cd32e2
+2025-10-09 12:21:02 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:21:02 - INFO - Stored props for event ID: 3be866344dfa050e602a6e69170b3cbe
+2025-10-09 12:21:02 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:21:02 - INFO - Stored props for event ID: a0ad5501e9d1d2ee9f61d9f293374f17
+2025-10-09 12:21:02 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:21:03 - INFO - Stored props for event ID: 1036171316ac51350b388c99e000cfc1
+2025-10-09 12:21:03 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:21:03 - INFO - Stored props for event ID: ff0c1ce30d562926ce40fc9bbaa2b7b1
+2025-10-09 12:21:03 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:21:04 - INFO - Stored props for event ID: 7b2ded52498efcf97a08ef10ee99b0f3
+2025-10-09 12:21:04 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:21:04 - INFO - Stored props for event ID: b808059d3ccc754ace4a3d23b58e47e8
+2025-10-09 12:21:04 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:21:04 - INFO - Stored props for event ID: 7ca953ab786f70b22cabbe4946d330fa
+2025-10-09 12:21:04 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:21:04 - INFO - HTML file with combined bets has been saved as 'index.html'
+2025-10-09 12:21:04 - ERROR - Error saving Excel file: 'is_favorable'
+2025-10-09 12:21:04 - INFO - Processing completed in 0:00:12.644176.
+2025-10-09 12:21:04 - INFO - Quota Used: 161
+2025-10-09 12:42:25 - INFO - Processing started.
+2025-10-09 12:42:25 - INFO - Fetched and filtered 30 events for sport: americanfootball_nfl
+2025-10-09 12:42:26 - INFO - Stored props for event ID: e10fe83ee6178a598e7fa84ea0913366
+2025-10-09 12:42:26 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:42:26 - INFO - Stored props for event ID: e34812ee7fbf13bd75e4298bccfbdd10
+2025-10-09 12:42:26 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:42:26 - INFO - Stored props for event ID: e5dd1fed586cfc0ec2d7c06f2a02c37a
+2025-10-09 12:42:26 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:42:27 - INFO - Stored props for event ID: f2c642e1f95555424b9a9a4f03733b42
+2025-10-09 12:42:27 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:42:27 - INFO - Stored props for event ID: dfa87b0532de1389297103c2e3195347
+2025-10-09 12:42:27 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:42:27 - INFO - Stored props for event ID: b235bc78609644cb28492cc1d6ad69fd
+2025-10-09 12:42:27 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:42:28 - INFO - Stored props for event ID: dd3a14fa1529e79bd338a7bfd71d5b3a
+2025-10-09 12:42:28 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:42:28 - INFO - Stored props for event ID: a11bbccb332241029ebaeb519b93b776
+2025-10-09 12:42:28 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:42:29 - INFO - Stored props for event ID: a7211a87bbd5fb2ee473eb9c93ee2e68
+2025-10-09 12:42:29 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:42:29 - INFO - Stored props for event ID: 4963bff460a5f26cab46a8e5ea6db148
+2025-10-09 12:42:29 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:42:29 - INFO - Stored props for event ID: 0c85b0939650e29689bb2651b33522eb
+2025-10-09 12:42:29 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:42:30 - INFO - Stored props for event ID: 9e705d669039f2ca8364f408b7792a8a
+2025-10-09 12:42:30 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:42:30 - INFO - Stored props for event ID: 82e432d5d8bc0b5a6cbe0c324de90de3
+2025-10-09 12:42:30 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:42:31 - INFO - Stored props for event ID: 33e0adf378d2856ffe5f8452e7d5512d
+2025-10-09 12:42:31 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:42:31 - INFO - Stored props for event ID: 38366aa83a3eb6cef71a1134c4fceb2c
+2025-10-09 12:42:31 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:42:31 - INFO - Stored props for event ID: 6076f9eab496770efc0ab7095b27c122
+2025-10-09 12:42:31 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:42:32 - INFO - Stored props for event ID: 79de65f1b97c9145ebdcb019eb486500
+2025-10-09 12:42:32 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:42:32 - INFO - Stored props for event ID: ba4e8bfa1f4eeaa74c7b09f409361c0d
+2025-10-09 12:42:32 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:42:32 - INFO - Stored props for event ID: 8f06a4b503cc7309cb0df4a8b67f9930
+2025-10-09 12:42:32 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:42:33 - INFO - Stored props for event ID: f0336c9a3749716250afba387d157377
+2025-10-09 12:42:33 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:42:33 - INFO - Stored props for event ID: 3127c0dd6ed51a44354af51791bc3e5a
+2025-10-09 12:42:33 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:42:34 - INFO - Stored props for event ID: 6a8d2daf7f75100d02656bc0217737e8
+2025-10-09 12:42:34 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:42:34 - INFO - Stored props for event ID: f7fa9341eeffb08f7e6e769398cd32e2
+2025-10-09 12:42:34 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:42:34 - INFO - Stored props for event ID: 3be866344dfa050e602a6e69170b3cbe
+2025-10-09 12:42:34 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:42:35 - INFO - Stored props for event ID: a0ad5501e9d1d2ee9f61d9f293374f17
+2025-10-09 12:42:35 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:42:35 - INFO - Stored props for event ID: 1036171316ac51350b388c99e000cfc1
+2025-10-09 12:42:35 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:42:35 - INFO - Stored props for event ID: ff0c1ce30d562926ce40fc9bbaa2b7b1
+2025-10-09 12:42:35 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:42:36 - INFO - Stored props for event ID: 7b2ded52498efcf97a08ef10ee99b0f3
+2025-10-09 12:42:36 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:42:36 - INFO - Stored props for event ID: b808059d3ccc754ace4a3d23b58e47e8
+2025-10-09 12:42:36 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:42:36 - INFO - Stored props for event ID: 7ca953ab786f70b22cabbe4946d330fa
+2025-10-09 12:42:36 - WARNING - Pinnacle data not found for event.
+2025-10-09 12:42:36 - INFO - HTML file with combined bets has been saved as 'index.html'
+2025-10-09 12:42:37 - INFO - Excel file 'player_props.xlsx' has been created with filters, sorting, and adjusted column widths.
+2025-10-09 12:42:37 - INFO - Processing completed in 0:00:11.892518.
+2025-10-09 12:42:37 - INFO - Quota Used: 161
