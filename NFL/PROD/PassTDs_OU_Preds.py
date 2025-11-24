@@ -3,7 +3,8 @@ import joblib
 import matplotlib.pyplot as plt
 import seaborn as sns
 import nfl_data_py as nfl
-
+import os
+os.chdir(r'C:\Users\rfo7799\Desktop\Git\TetheredAI\NFL\PROD')
 schedule_data = pd.read_csv(r'2025_schedule.csv')
 # Select only the relevant columns
 columns = [
@@ -218,7 +219,7 @@ def query_props():
 	conn = sqlite3.connect(DATABASE_NAME)
 	table_name = 'player_props'
 	prop_df = pd.read_sql(f"""
-					 SELECT * FROM {table_name} WHERE market_type = 'player_pass_yds'
+					 SELECT * FROM {table_name} WHERE market_type = 'player_pass_tds'
 					 --AND lower(event_name) like '%tit%'
 					 """, conn)
 	return prop_df
@@ -318,9 +319,7 @@ def prediction_algorithm(schd_df, main_df):
 	import joblib
 	import numpy as np
 
-	week_num = 10
-
-	# Step 1: Load the saved model from the .joblib file.
+	week_num = 12
 	try:
 		model = joblib.load('rf_pass_tds_model.joblib')
 		print("Model loaded successfully.")
@@ -446,8 +445,8 @@ def main():
 	import datetime
 	today = datetime.date.today()
 	today = today.strftime("%Y-%m-%d")
-	X_predict[['passer_player_name','week','home_team','away_team','status','probability_over']].sort_values(by='probability_over', ascending=False)[:10].to_csv(fr'10_over_passing_yds_{today}.csv')
-	X_predict[['passer_player_name','week','home_team','away_team','status','probability_over']].sort_values(by='probability_over', ascending=True)[:10].to_csv(fr'10_under_passing_yds_{today}.csv')
+	X_predict[['passer_player_name','week','home_team','away_team','status','probability_over']].sort_values(by='probability_over', ascending=False)[:10].to_csv(fr'Preds/10_over_passing_TDs_{today}.csv')
+	X_predict[['passer_player_name','week','home_team','away_team','status','probability_over']].sort_values(by='probability_over', ascending=True)[:10].to_csv(fr'Preds/10_under_passing_TDs_{today}.csv')
 	
 if __name__ == "__main__":
     main()

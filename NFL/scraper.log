@@ -653,3 +653,165 @@
 2025-11-06 10:43:06 - INFO - Excel file 'player_props.xlsx' has been created with filters, sorting, and adjusted column widths.
 2025-11-06 10:43:06 - INFO - Processing completed in 0:00:26.199597.
 2025-11-06 10:43:06 - INFO - Quota Used: 138
+2025-11-13 11:32:43 - INFO - Processing started.
+2025-11-13 11:32:48 - INFO - Fetched and filtered 29 events for sport: americanfootball_nfl
+2025-11-13 11:32:49 - INFO - Stored props for event ID: 32ec2bd4ac9e4c40f9f5cbed7e67f837
+2025-11-13 11:32:49 - WARNING - Pinnacle data not found for event.
+2025-11-13 11:32:49 - INFO - Stored props for event ID: 265f0188945bb81ec64751571eb724cb
+2025-11-13 11:32:49 - WARNING - Pinnacle data not found for event.
+2025-11-13 11:32:50 - INFO - Stored props for event ID: 0ae85bbc3711ad0cb94475a40e2364f0
+2025-11-13 11:32:50 - WARNING - Pinnacle data not found for event.
+2025-11-13 11:32:50 - INFO - Stored props for event ID: 96377d2fb55e3cef733cecccdecaed5f
+2025-11-13 11:32:50 - WARNING - Pinnacle data not found for event.
+2025-11-13 11:32:51 - INFO - Stored props for event ID: 229a5e9ce60dcb344a8cc3c97121154e
+2025-11-13 11:32:51 - WARNING - Pinnacle data not found for event.
+2025-11-13 11:32:51 - INFO - Stored props for event ID: 7147476b5d96c0ee874b838de3910ee3
+2025-11-13 11:32:51 - WARNING - Pinnacle data not found for event.
+2025-11-13 11:32:52 - INFO - Stored props for event ID: 5c06e82838fcfade9adf1e89b8bd3081
+2025-11-13 11:32:52 - WARNING - Pinnacle data not found for event.
+2025-11-13 11:32:52 - INFO - Stored props for event ID: fd2f29289d6437a7c07d4780c5f04936
+2025-11-13 11:32:52 - WARNING - Pinnacle data not found for event.
+2025-11-13 11:32:53 - INFO - Stored props for event ID: 591fd7cff37201a14cbdfbd457592445
+2025-11-13 11:32:53 - WARNING - Pinnacle data not found for event.
+2025-11-13 11:32:53 - INFO - Stored props for event ID: 91630b9c62640117918fa30d2a62d2db
+2025-11-13 11:32:53 - WARNING - Pinnacle data not found for event.
+2025-11-13 11:32:54 - INFO - Stored props for event ID: e926e654cedeb65fcfcc389a5158ef4e
+2025-11-13 11:32:54 - WARNING - Pinnacle data not found for event.
+2025-11-13 11:32:54 - INFO - Stored props for event ID: cc60225b5a907bd9ba7c27c23131fc5c
+2025-11-13 11:32:54 - WARNING - Pinnacle data not found for event.
+2025-11-13 11:32:55 - INFO - Stored props for event ID: 96ce7785b0980b03282c7e10d4c58d4a
+2025-11-13 11:32:55 - WARNING - Pinnacle data not found for event.
+2025-11-13 11:32:56 - INFO - Stored props for event ID: 6d209e0e637f3b116ec958e0634f2a02
+2025-11-13 11:32:56 - WARNING - Pinnacle data not found for event.
+2025-11-13 11:32:56 - INFO - Stored props for event ID: 80d04ba917883a6438580ebae9fb0f22
+2025-11-13 11:32:56 - WARNING - Pinnacle data not found for event.
+2025-11-13 11:32:57 - INFO - Stored props for event ID: cd2e0964817c30ad3f5144ea49b55f2b
+2025-11-13 11:32:57 - WARNING - Pinnacle data not found for event.
+2025-11-13 11:32:57 - INFO - Stored props for event ID: 7159d60c7a31c7d593167637723d7663
+2025-11-13 11:32:57 - WARNING - Pinnacle data not found for event.
+2025-11-13 11:32:58 - INFO - Stored props for event ID: c8913b70b63ae247f23a4e1dec08c668
+2025-11-13 11:32:58 - WARNING - Pinnacle data not found for event.
+2025-11-13 11:32:58 - INFO - Stored props for event ID: 1a8f3d70399a5cad83c95196795ed77b
+2025-11-13 11:32:58 - WARNING - Pinnacle data not found for event.
+2025-11-13 11:32:59 - INFO - Stored props for event ID: 535bbe97d4e56494b039ade88459c338
+2025-11-13 11:32:59 - WARNING - Pinnacle data not found for event.
+2025-11-13 11:32:59 - INFO - Stored props for event ID: 91019a528f43cd28965fdc68a3f3ef85
+2025-11-13 11:32:59 - WARNING - Pinnacle data not found for event.
+2025-11-13 11:33:00 - INFO - Stored props for event ID: 8b39d8dc550ced94f9faa91878ebf6b6
+2025-11-13 11:33:00 - WARNING - Pinnacle data not found for event.
+2025-11-13 11:33:00 - INFO - Stored props for event ID: 0ff4e68cf39cc57ca7cf1276e4a44d2f
+2025-11-13 11:33:00 - WARNING - Pinnacle data not found for event.
+2025-11-13 11:33:01 - INFO - Stored props for event ID: e32e0030899c06fdf2c74745ca27d85a
+2025-11-13 11:33:01 - WARNING - Pinnacle data not found for event.
+2025-11-13 11:33:01 - INFO - Stored props for event ID: 27f50ddbc4c3fbad10398c5187a28dc7
+2025-11-13 11:33:01 - WARNING - Pinnacle data not found for event.
+2025-11-13 11:33:02 - INFO - Stored props for event ID: 8c2d6a56aa63f42227f18a18fc3d2146
+2025-11-13 11:33:02 - WARNING - Pinnacle data not found for event.
+2025-11-13 11:33:02 - INFO - Stored props for event ID: 4553ba763cb3cfcfc33fd62672a2057f
+2025-11-13 11:33:02 - WARNING - Pinnacle data not found for event.
+2025-11-13 11:33:03 - INFO - Stored props for event ID: 9e7119f5a24471c39145663b84f100b2
+2025-11-13 11:33:03 - WARNING - Pinnacle data not found for event.
+2025-11-13 11:33:03 - INFO - Stored props for event ID: 90391be251d876bb41d36978a43c7ac2
+2025-11-13 11:33:03 - WARNING - Pinnacle data not found for event.
+2025-11-13 11:33:03 - INFO - HTML file with combined bets has been saved as 'index.html'
+2025-11-13 11:33:03 - INFO - Excel file 'player_props.xlsx' has been created with filters, sorting, and adjusted column widths.
+2025-11-13 11:33:03 - INFO - Processing completed in 0:00:19.940893.
+2025-11-13 11:33:03 - INFO - Quota Used: 138
+2025-11-23 12:01:42 - INFO - Processing started.
+2025-11-23 12:01:50 - INFO - Fetched and filtered 29 events for sport: americanfootball_nfl
+2025-11-23 12:01:50 - INFO - Stored props for event ID: 7159d60c7a31c7d593167637723d7663
+2025-11-23 12:01:50 - WARNING - Pinnacle data not found for event.
+2025-11-23 12:01:51 - INFO - Stored props for event ID: c8913b70b63ae247f23a4e1dec08c668
+2025-11-23 12:01:51 - WARNING - Pinnacle data not found for event.
+2025-11-23 12:01:51 - INFO - Stored props for event ID: 1a8f3d70399a5cad83c95196795ed77b
+2025-11-23 12:01:51 - WARNING - Pinnacle data not found for event.
+2025-11-23 12:01:51 - INFO - Stored props for event ID: 535bbe97d4e56494b039ade88459c338
+2025-11-23 12:01:51 - WARNING - Pinnacle data not found for event.
+2025-11-23 12:01:52 - INFO - Stored props for event ID: 91019a528f43cd28965fdc68a3f3ef85
+2025-11-23 12:01:52 - WARNING - Pinnacle data not found for event.
+2025-11-23 12:01:52 - INFO - Stored props for event ID: 8b39d8dc550ced94f9faa91878ebf6b6
+2025-11-23 12:01:52 - WARNING - Pinnacle data not found for event.
+2025-11-23 12:01:53 - INFO - Stored props for event ID: 0ff4e68cf39cc57ca7cf1276e4a44d2f
+2025-11-23 12:01:53 - WARNING - Pinnacle data not found for event.
+2025-11-23 12:01:53 - INFO - Stored props for event ID: e32e0030899c06fdf2c74745ca27d85a
+2025-11-23 12:01:53 - WARNING - Pinnacle data not found for event.
+2025-11-23 12:01:54 - INFO - Stored props for event ID: 27f50ddbc4c3fbad10398c5187a28dc7
+2025-11-23 12:01:54 - WARNING - Pinnacle data not found for event.
+2025-11-23 12:01:54 - INFO - Stored props for event ID: 8c2d6a56aa63f42227f18a18fc3d2146
+2025-11-23 12:01:54 - WARNING - Pinnacle data not found for event.
+2025-11-23 12:01:55 - INFO - Stored props for event ID: 4553ba763cb3cfcfc33fd62672a2057f
+2025-11-23 12:01:55 - WARNING - Pinnacle data not found for event.
+2025-11-23 12:01:55 - INFO - Stored props for event ID: 9e7119f5a24471c39145663b84f100b2
+2025-11-23 12:01:55 - WARNING - Pinnacle data not found for event.
+2025-11-23 12:01:56 - INFO - Stored props for event ID: 90391be251d876bb41d36978a43c7ac2
+2025-11-23 12:01:56 - WARNING - Pinnacle data not found for event.
+2025-11-23 12:01:56 - INFO - Stored props for event ID: fe2eb07797580740af78037ab498198e
+2025-11-23 12:01:56 - WARNING - Pinnacle data not found for event.
+2025-11-23 12:01:57 - INFO - Stored props for event ID: de53b8a594fe830c5fd56484705cd756
+2025-11-23 12:01:57 - WARNING - Pinnacle data not found for event.
+2025-11-23 12:01:57 - INFO - Stored props for event ID: 883a79a306b312fad75ebf04b441b4da
+2025-11-23 12:01:57 - WARNING - Pinnacle data not found for event.
+2025-11-23 12:01:58 - INFO - Stored props for event ID: 52f539d9d080618aa8830a0b03846a80
+2025-11-23 12:01:58 - WARNING - Pinnacle data not found for event.
+2025-11-23 12:01:59 - INFO - Stored props for event ID: c0d324e29ce58b36bdc77564f7aae56f
+2025-11-23 12:01:59 - WARNING - Pinnacle data not found for event.
+2025-11-23 12:02:00 - INFO - Stored props for event ID: 9da608f5bdae527b280abd61e47a110b
+2025-11-23 12:02:00 - WARNING - Pinnacle data not found for event.
+2025-11-23 12:02:00 - INFO - Stored props for event ID: 67e51d17848485bed8737bd7043a275a
+2025-11-23 12:02:00 - WARNING - Pinnacle data not found for event.
+2025-11-23 12:02:01 - INFO - Stored props for event ID: 36fcf5ca155a5dcd2f7a87fd2a985b02
+2025-11-23 12:02:01 - WARNING - Pinnacle data not found for event.
+2025-11-23 12:02:01 - INFO - Stored props for event ID: fa46c661007f5f0cbbf6abf939ac9d51
+2025-11-23 12:02:01 - WARNING - Pinnacle data not found for event.
+2025-11-23 12:02:02 - INFO - Stored props for event ID: 61e1e459b2ddafd43e8808d4f40c01d9
+2025-11-23 12:02:02 - WARNING - Pinnacle data not found for event.
+2025-11-23 12:02:02 - INFO - Stored props for event ID: e3c9bfba57bbe784481d881ea3b4519d
+2025-11-23 12:02:02 - WARNING - Pinnacle data not found for event.
+2025-11-23 12:02:03 - INFO - Stored props for event ID: 6f956074c4df48e7b07a3286a6c6ed2a
+2025-11-23 12:02:03 - WARNING - Pinnacle data not found for event.
+2025-11-23 12:02:03 - INFO - Stored props for event ID: 365a766a3862bc47a5455dc3b097421e
+2025-11-23 12:02:03 - WARNING - Pinnacle data not found for event.
+2025-11-23 12:02:04 - INFO - Stored props for event ID: 76ac5a8d2c8679ae6ea8861114791bd8
+2025-11-23 12:02:04 - WARNING - Pinnacle data not found for event.
+2025-11-23 12:02:04 - INFO - Stored props for event ID: 9c040de8f1dfc3ddee20e0d65c9402de
+2025-11-23 12:02:04 - WARNING - Pinnacle data not found for event.
+2025-11-23 12:02:05 - INFO - Stored props for event ID: 3e65786eddd4c7aee9e7f2504f6fdedc
+2025-11-23 12:02:05 - WARNING - Pinnacle data not found for event.
+2025-11-23 12:02:05 - INFO - HTML file with combined bets has been saved as 'index.html'
+2025-11-23 12:02:05 - INFO - Excel file 'player_props.xlsx' has been created with filters, sorting, and adjusted column widths.
+2025-11-23 12:02:05 - INFO - Processing completed in 0:00:23.121005.
+2025-11-23 12:02:05 - INFO - Quota Used: 132
+2025-11-23 12:03:14 - INFO - Processing started.
+2025-11-23 12:03:25 - INFO - Fetched and filtered 23 events for sport: americanfootball_nfl
+2025-11-23 12:03:26 - INFO - Stored props for event ID: 1a8f3d70399a5cad83c95196795ed77b
+2025-11-23 12:03:26 - WARNING - Pinnacle data not found for event.
+2025-11-23 12:03:26 - INFO - Stored props for event ID: e32e0030899c06fdf2c74745ca27d85a
+2025-11-23 12:03:26 - WARNING - Pinnacle data not found for event.
+2025-11-23 12:03:27 - INFO - Stored props for event ID: 27f50ddbc4c3fbad10398c5187a28dc7
+2025-11-23 12:03:27 - WARNING - Pinnacle data not found for event.
+2025-11-23 12:03:28 - INFO - Stored props for event ID: 8c2d6a56aa63f42227f18a18fc3d2146
+2025-11-23 12:03:28 - WARNING - Pinnacle data not found for event.
+2025-11-23 12:03:28 - INFO - Stored props for event ID: 4553ba763cb3cfcfc33fd62672a2057f
+2025-11-23 12:03:28 - WARNING - Pinnacle data not found for event.
+2025-11-23 12:03:29 - ERROR - HTTP error occurred while fetching props for event ID 9e7119f5a24471c39145663b84f100b2: 401 Client Error: Unauthorized for url: https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/9e7119f5a24471c39145663b84f100b2/odds?apiKey=81d21adfe60b6402965439773a15f073&regions=us&markets=player_anytime_td%2Cplayer_pass_tds%2Cplayer_pass_yds%2Cplayer_pass_completions%2Cplayer_pass_attempts%2Cplayer_pass_interceptions%2Cplayer_rush_yds%2Cplayer_rush_attempts%2Cplayer_receptions%2Cplayer_reception_yds%2Cplayer_kicking_points&oddsFormat=american&bookmakers=betmgm
+2025-11-23 12:03:30 - ERROR - HTTP error occurred while fetching props for event ID 90391be251d876bb41d36978a43c7ac2: 401 Client Error: Unauthorized for url: https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/90391be251d876bb41d36978a43c7ac2/odds?apiKey=81d21adfe60b6402965439773a15f073&regions=us&markets=player_anytime_td%2Cplayer_pass_tds%2Cplayer_pass_yds%2Cplayer_pass_completions%2Cplayer_pass_attempts%2Cplayer_pass_interceptions%2Cplayer_rush_yds%2Cplayer_rush_attempts%2Cplayer_receptions%2Cplayer_reception_yds%2Cplayer_kicking_points&oddsFormat=american&bookmakers=betmgm
+2025-11-23 12:03:30 - ERROR - HTTP error occurred while fetching props for event ID fe2eb07797580740af78037ab498198e: 401 Client Error: Unauthorized for url: https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/fe2eb07797580740af78037ab498198e/odds?apiKey=81d21adfe60b6402965439773a15f073&regions=us&markets=player_anytime_td%2Cplayer_pass_tds%2Cplayer_pass_yds%2Cplayer_pass_completions%2Cplayer_pass_attempts%2Cplayer_pass_interceptions%2Cplayer_rush_yds%2Cplayer_rush_attempts%2Cplayer_receptions%2Cplayer_reception_yds%2Cplayer_kicking_points&oddsFormat=american&bookmakers=betmgm
+2025-11-23 12:03:31 - ERROR - HTTP error occurred while fetching props for event ID de53b8a594fe830c5fd56484705cd756: 401 Client Error: Unauthorized for url: https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/de53b8a594fe830c5fd56484705cd756/odds?apiKey=81d21adfe60b6402965439773a15f073&regions=us&markets=player_anytime_td%2Cplayer_pass_tds%2Cplayer_pass_yds%2Cplayer_pass_completions%2Cplayer_pass_attempts%2Cplayer_pass_interceptions%2Cplayer_rush_yds%2Cplayer_rush_attempts%2Cplayer_receptions%2Cplayer_reception_yds%2Cplayer_kicking_points&oddsFormat=american&bookmakers=betmgm
+2025-11-23 12:03:31 - ERROR - HTTP error occurred while fetching props for event ID 883a79a306b312fad75ebf04b441b4da: 401 Client Error: Unauthorized for url: https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/883a79a306b312fad75ebf04b441b4da/odds?apiKey=81d21adfe60b6402965439773a15f073&regions=us&markets=player_anytime_td%2Cplayer_pass_tds%2Cplayer_pass_yds%2Cplayer_pass_completions%2Cplayer_pass_attempts%2Cplayer_pass_interceptions%2Cplayer_rush_yds%2Cplayer_rush_attempts%2Cplayer_receptions%2Cplayer_reception_yds%2Cplayer_kicking_points&oddsFormat=american&bookmakers=betmgm
+2025-11-23 12:03:32 - ERROR - HTTP error occurred while fetching props for event ID 52f539d9d080618aa8830a0b03846a80: 401 Client Error: Unauthorized for url: https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/52f539d9d080618aa8830a0b03846a80/odds?apiKey=81d21adfe60b6402965439773a15f073&regions=us&markets=player_anytime_td%2Cplayer_pass_tds%2Cplayer_pass_yds%2Cplayer_pass_completions%2Cplayer_pass_attempts%2Cplayer_pass_interceptions%2Cplayer_rush_yds%2Cplayer_rush_attempts%2Cplayer_receptions%2Cplayer_reception_yds%2Cplayer_kicking_points&oddsFormat=american&bookmakers=betmgm
+2025-11-23 12:03:32 - ERROR - HTTP error occurred while fetching props for event ID c0d324e29ce58b36bdc77564f7aae56f: 401 Client Error: Unauthorized for url: https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/c0d324e29ce58b36bdc77564f7aae56f/odds?apiKey=81d21adfe60b6402965439773a15f073&regions=us&markets=player_anytime_td%2Cplayer_pass_tds%2Cplayer_pass_yds%2Cplayer_pass_completions%2Cplayer_pass_attempts%2Cplayer_pass_interceptions%2Cplayer_rush_yds%2Cplayer_rush_attempts%2Cplayer_receptions%2Cplayer_reception_yds%2Cplayer_kicking_points&oddsFormat=american&bookmakers=betmgm
+2025-11-23 12:03:33 - ERROR - HTTP error occurred while fetching props for event ID 9da608f5bdae527b280abd61e47a110b: 401 Client Error: Unauthorized for url: https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/9da608f5bdae527b280abd61e47a110b/odds?apiKey=81d21adfe60b6402965439773a15f073&regions=us&markets=player_anytime_td%2Cplayer_pass_tds%2Cplayer_pass_yds%2Cplayer_pass_completions%2Cplayer_pass_attempts%2Cplayer_pass_interceptions%2Cplayer_rush_yds%2Cplayer_rush_attempts%2Cplayer_receptions%2Cplayer_reception_yds%2Cplayer_kicking_points&oddsFormat=american&bookmakers=betmgm
+2025-11-23 12:03:33 - ERROR - HTTP error occurred while fetching props for event ID 67e51d17848485bed8737bd7043a275a: 401 Client Error: Unauthorized for url: https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/67e51d17848485bed8737bd7043a275a/odds?apiKey=81d21adfe60b6402965439773a15f073&regions=us&markets=player_anytime_td%2Cplayer_pass_tds%2Cplayer_pass_yds%2Cplayer_pass_completions%2Cplayer_pass_attempts%2Cplayer_pass_interceptions%2Cplayer_rush_yds%2Cplayer_rush_attempts%2Cplayer_receptions%2Cplayer_reception_yds%2Cplayer_kicking_points&oddsFormat=american&bookmakers=betmgm
+2025-11-23 12:03:34 - ERROR - HTTP error occurred while fetching props for event ID 36fcf5ca155a5dcd2f7a87fd2a985b02: 401 Client Error: Unauthorized for url: https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/36fcf5ca155a5dcd2f7a87fd2a985b02/odds?apiKey=81d21adfe60b6402965439773a15f073&regions=us&markets=player_anytime_td%2Cplayer_pass_tds%2Cplayer_pass_yds%2Cplayer_pass_completions%2Cplayer_pass_attempts%2Cplayer_pass_interceptions%2Cplayer_rush_yds%2Cplayer_rush_attempts%2Cplayer_receptions%2Cplayer_reception_yds%2Cplayer_kicking_points&oddsFormat=american&bookmakers=betmgm
+2025-11-23 12:03:35 - ERROR - HTTP error occurred while fetching props for event ID fa46c661007f5f0cbbf6abf939ac9d51: 401 Client Error: Unauthorized for url: https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/fa46c661007f5f0cbbf6abf939ac9d51/odds?apiKey=81d21adfe60b6402965439773a15f073&regions=us&markets=player_anytime_td%2Cplayer_pass_tds%2Cplayer_pass_yds%2Cplayer_pass_completions%2Cplayer_pass_attempts%2Cplayer_pass_interceptions%2Cplayer_rush_yds%2Cplayer_rush_attempts%2Cplayer_receptions%2Cplayer_reception_yds%2Cplayer_kicking_points&oddsFormat=american&bookmakers=betmgm
+2025-11-23 12:03:35 - ERROR - HTTP error occurred while fetching props for event ID 61e1e459b2ddafd43e8808d4f40c01d9: 401 Client Error: Unauthorized for url: https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/61e1e459b2ddafd43e8808d4f40c01d9/odds?apiKey=81d21adfe60b6402965439773a15f073&regions=us&markets=player_anytime_td%2Cplayer_pass_tds%2Cplayer_pass_yds%2Cplayer_pass_completions%2Cplayer_pass_attempts%2Cplayer_pass_interceptions%2Cplayer_rush_yds%2Cplayer_rush_attempts%2Cplayer_receptions%2Cplayer_reception_yds%2Cplayer_kicking_points&oddsFormat=american&bookmakers=betmgm
+2025-11-23 12:03:36 - ERROR - HTTP error occurred while fetching props for event ID e3c9bfba57bbe784481d881ea3b4519d: 401 Client Error: Unauthorized for url: https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/e3c9bfba57bbe784481d881ea3b4519d/odds?apiKey=81d21adfe60b6402965439773a15f073&regions=us&markets=player_anytime_td%2Cplayer_pass_tds%2Cplayer_pass_yds%2Cplayer_pass_completions%2Cplayer_pass_attempts%2Cplayer_pass_interceptions%2Cplayer_rush_yds%2Cplayer_rush_attempts%2Cplayer_receptions%2Cplayer_reception_yds%2Cplayer_kicking_points&oddsFormat=american&bookmakers=betmgm
+2025-11-23 12:03:36 - ERROR - HTTP error occurred while fetching props for event ID 6f956074c4df48e7b07a3286a6c6ed2a: 401 Client Error: Unauthorized for url: https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/6f956074c4df48e7b07a3286a6c6ed2a/odds?apiKey=81d21adfe60b6402965439773a15f073&regions=us&markets=player_anytime_td%2Cplayer_pass_tds%2Cplayer_pass_yds%2Cplayer_pass_completions%2Cplayer_pass_attempts%2Cplayer_pass_interceptions%2Cplayer_rush_yds%2Cplayer_rush_attempts%2Cplayer_receptions%2Cplayer_reception_yds%2Cplayer_kicking_points&oddsFormat=american&bookmakers=betmgm
+2025-11-23 12:03:37 - ERROR - HTTP error occurred while fetching props for event ID 365a766a3862bc47a5455dc3b097421e: 401 Client Error: Unauthorized for url: https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/365a766a3862bc47a5455dc3b097421e/odds?apiKey=81d21adfe60b6402965439773a15f073&regions=us&markets=player_anytime_td%2Cplayer_pass_tds%2Cplayer_pass_yds%2Cplayer_pass_completions%2Cplayer_pass_attempts%2Cplayer_pass_interceptions%2Cplayer_rush_yds%2Cplayer_rush_attempts%2Cplayer_receptions%2Cplayer_reception_yds%2Cplayer_kicking_points&oddsFormat=american&bookmakers=betmgm
+2025-11-23 12:03:37 - ERROR - HTTP error occurred while fetching props for event ID 76ac5a8d2c8679ae6ea8861114791bd8: 401 Client Error: Unauthorized for url: https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/76ac5a8d2c8679ae6ea8861114791bd8/odds?apiKey=81d21adfe60b6402965439773a15f073&regions=us&markets=player_anytime_td%2Cplayer_pass_tds%2Cplayer_pass_yds%2Cplayer_pass_completions%2Cplayer_pass_attempts%2Cplayer_pass_interceptions%2Cplayer_rush_yds%2Cplayer_rush_attempts%2Cplayer_receptions%2Cplayer_reception_yds%2Cplayer_kicking_points&oddsFormat=american&bookmakers=betmgm
+2025-11-23 12:03:38 - ERROR - HTTP error occurred while fetching props for event ID 9c040de8f1dfc3ddee20e0d65c9402de: 401 Client Error: Unauthorized for url: https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/9c040de8f1dfc3ddee20e0d65c9402de/odds?apiKey=81d21adfe60b6402965439773a15f073&regions=us&markets=player_anytime_td%2Cplayer_pass_tds%2Cplayer_pass_yds%2Cplayer_pass_completions%2Cplayer_pass_attempts%2Cplayer_pass_interceptions%2Cplayer_rush_yds%2Cplayer_rush_attempts%2Cplayer_receptions%2Cplayer_reception_yds%2Cplayer_kicking_points&oddsFormat=american&bookmakers=betmgm
+2025-11-23 12:03:39 - ERROR - HTTP error occurred while fetching props for event ID 3e65786eddd4c7aee9e7f2504f6fdedc: 401 Client Error: Unauthorized for url: https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events/3e65786eddd4c7aee9e7f2504f6fdedc/odds?apiKey=81d21adfe60b6402965439773a15f073&regions=us&markets=player_anytime_td%2Cplayer_pass_tds%2Cplayer_pass_yds%2Cplayer_pass_completions%2Cplayer_pass_attempts%2Cplayer_pass_interceptions%2Cplayer_rush_yds%2Cplayer_rush_attempts%2Cplayer_receptions%2Cplayer_reception_yds%2Cplayer_kicking_points&oddsFormat=american&bookmakers=betmgm
+2025-11-23 12:03:39 - INFO - HTML file with combined bets has been saved as 'index.html'
+2025-11-23 12:03:39 - INFO - Excel file 'player_props.xlsx' has been created with filters, sorting, and adjusted column widths.
+2025-11-23 12:03:39 - INFO - Processing completed in 0:00:25.136456.
+2025-11-23 12:03:39 - INFO - Quota Used: 44

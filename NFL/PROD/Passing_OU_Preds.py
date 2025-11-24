@@ -3,7 +3,8 @@ import joblib
 import matplotlib.pyplot as plt
 import seaborn as sns
 import nfl_data_py as nfl
-
+import os
+os.chdir(r'C:\Users\rfo7799\Desktop\Git\TetheredAI\NFL\PROD')
 schedule_data = pd.read_csv(r'2025_schedule.csv')
 # Select only the relevant columns
 columns = [
@@ -318,7 +319,7 @@ def prediction_algorithm(schd_df, main_df):
 	import joblib
 	import numpy as np
 
-	week_num = 10
+	week_num = 12
 
 	# Step 1: Load the saved model from the .joblib file.
 	try:
@@ -446,8 +447,8 @@ def main():
 	import datetime
 	today = datetime.date.today()
 	today = today.strftime("%Y-%m-%d")
-	X_predict[['passer_player_name','week','home_team','away_team','status','probability_over']].sort_values(by='probability_over', ascending=False)[:10].to_csv(fr'10_over_passing_yds_{today}.csv')
-	X_predict[['passer_player_name','week','home_team','away_team','status','probability_over']].sort_values(by='probability_over', ascending=True)[:10].to_csv(fr'10_under_passing_yds_{today}.csv')
+	X_predict[['passer_player_name','week','home_team','away_team','status','probability_over']].sort_values(by='probability_over', ascending=False)[:10].to_csv(fr'Preds/10_over_passing_yds_{today}.csv')
+	X_predict[['passer_player_name','week','home_team','away_team','status','probability_over']].sort_values(by='probability_over', ascending=True)[:10].to_csv(fr'Preds/10_under_passing_yds_{today}.csv')
 	
 if __name__ == "__main__":
     main()

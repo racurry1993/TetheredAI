@@ -426,6 +426,10 @@ y_proba = rf_tuned_model.predict_proba(X_test)[:, 1]
 auc_roc = roc_auc_score(y_test, y_proba)
 conf_matrix = confusion_matrix(y_test, y_pred)
 
+print('Accuracy: ', accuracy)
+print('F1: ', f1)
+print('Confusion Matrix: ', conf_matrix)
+
 # --- 1. ADD FEATURE IMPORTANCE SCORING ---
 feature_importances_df = pd.DataFrame(
     rf_tuned_model.feature_importances_, 

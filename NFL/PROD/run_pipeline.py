@@ -11,6 +11,8 @@ SCRIPTS = [
     {"type": "python", "path": "C:/Users/rfo7799\Desktop/Git/TetheredAI/NFL/PROD/oddsapi_player_props.py"},
     {"type": "python", "path": "C:/Users/rfo7799\Desktop/Git/TetheredAI/NFL/PROD/NFL_Player_Yards_Passing_Model_Training.py"},
     {"type": "python", "path": "C:/Users/rfo7799\Desktop/Git/TetheredAI/NFL/PROD/NFL_Player_TDs_Passing_Model_Training.py"},
+    {"type": "python", "path": "C:/Users/rfo7799\Desktop/Git/TetheredAI/NFL/PROD/Passing_OU_Preds.py"},
+    {"type": "python", "path": "C:/Users/rfo7799\Desktop/Git/TetheredAI/NFL/PROD/PassTDs_OU_Preds.py"},
 ]
 
 def run_script(script_info):
