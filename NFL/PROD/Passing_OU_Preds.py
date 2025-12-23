@@ -220,7 +220,7 @@ def query_props():
 	table_name = 'player_props'
 	prop_df = pd.read_sql(f"""
 					 SELECT * FROM {table_name} WHERE market_type = 'player_pass_yds'
-					 --AND lower(event_name) like '%tit%'
+					 --AND lower(event_name) like '%tita%'
 					 """, conn)
 	return prop_df
 	
@@ -319,7 +319,7 @@ def prediction_algorithm(schd_df, main_df):
 	import joblib
 	import numpy as np
 
-	week_num = 12
+	week_num = 17
 
 	# Step 1: Load the saved model from the .joblib file.
 	try:
@@ -429,6 +429,13 @@ def prediction_algorithm(schd_df, main_df):
 	probabilities = model.predict_proba(X_predict)
 	prob_of_over = probabilities[:, 1]
 	X_predict['probability_over'] = prob_of_over
+	def calculate_implied_prob(odds):
+		if odds < 0:
+			return abs(odds) / (abs(odds) + 100)
+		else:
+			return 100 / (odds + 100)
+	X_predict['implied_prob'] = X_predict['odds'].apply(calculate_implied_prob)
+	X_predict['edge'] = X_predict['probability_over'] - X_predict['implied_prob']
 	X_predict['status'] = predictions
 	X_predict['status'] = X_predict['status'].apply(lambda x: 'Over' if x == 1 else 'Under')
 
@@ -443,12 +450,13 @@ def main():
 	final_df = preprocessing_data()
 	prop_df = query_props()
 	prop_df = name_match(final_df,prop_df)
+	final_df = final_df.merge(prop_df[['passer_player_name','odds']], on='passer_player_name')
 	X_predict = prediction_algorithm(schedule_df_final,final_df)
 	import datetime
 	today = datetime.date.today()
 	today = today.strftime("%Y-%m-%d")
-	X_predict[['passer_player_name','week','home_team','away_team','status','probability_over']].sort_values(by='probability_over', ascending=False)[:10].to_csv(fr'Preds/10_over_passing_yds_{today}.csv')
-	X_predict[['passer_player_name','week','home_team','away_team','status','probability_over']].sort_values(by='probability_over', ascending=True)[:10].to_csv(fr'Preds/10_under_passing_yds_{today}.csv')
+	X_predict[['passer_player_name','week','home_team','away_team','status','probability_over','implied_prob','edge','odds']].sort_values(by='probability_over', ascending=False)[:10].to_csv(fr'Preds/10_over_passing_yds_{today}.csv')
+	X_predict[['passer_player_name','week','home_team','away_team','status','probability_over','implied_prob','edge','odds']].sort_values(by='probability_over', ascending=True)[:10].to_csv(fr'Preds/10_under_passing_yds_{today}.csv')
 	
 if __name__ == "__main__":
     main()

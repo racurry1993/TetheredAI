@@ -319,13 +319,18 @@ def prediction_algorithm(schd_df, main_df):
 	import joblib
 	import numpy as np
 
-	week_num = 12
+	week_num = 17
 	try:
-		model = joblib.load('rf_pass_tds_model.joblib')
+		model = joblib.load('nfl_pass_td_tuned_model.joblib')
 		print("Model loaded successfully.")
 	except FileNotFoundError:
 		print("Error: The .joblib file was not found. Please check the file path and name.")
 		#exit()
+
+	try:
+		edge_threshold = joblib.load('edge_threshold.joblib')
+	except:
+		edge_threshold = 0.22  # Fallback to the value we found
 
 
 	# Step 3: Prepare the data for prediction.
@@ -419,34 +424,73 @@ def prediction_algorithm(schd_df, main_df):
 	)
 	# Step 3d: Align the columns to ensure they match the training data perfectly.
 	# Any column in the training data not present in the prediction data will be filled with 0.
+	odds_values = week_dummies['odds'].values
 	X_predict = week_dummies.reindex(columns=features_from_training, fill_value=0)
 	# Step 4: Use the loaded model to predict the passing yards.
-	predictions = model.predict(X_predict) # <--- **FIXED LINE**
+	lambdas = model.predict(X_predict)
 
-	# Step 5: Add the predictions to your DataFrame.
-	probabilities = model.predict_proba(X_predict)
-	prob_of_over = probabilities[:, 1]
+	line = 1.5
+	from scipy.stats import poisson
+	prob_of_over = 1 - poisson.cdf(line, lambdas)
+	X_predict['odds'] = odds_values
+	X_predict['expected_tds'] = lambdas
 	X_predict['probability_over'] = prob_of_over
-	X_predict['status'] = predictions
-	X_predict['status'] = X_predict['status'].apply(lambda x: 'Over' if x == 1 else 'Under')
 
-	# Step 6: Join the original player/team names back to the predictions DataFrame.
-	X_predict = pd.concat([prediction_info, X_predict], axis=1)
+    # Step 6: Calculate Edge and Recommendations
+	def calculate_implied_prob(odds):
+		if odds < 0:
+			return abs(odds) / (abs(odds) + 100)
+		else:
+			return 100 / (odds + 100)
 
-	# Step 6: Join the original player/team names back to the predictions DataFrame.
-	X_predict = pd.concat([prediction_info, X_predict], axis=1)
+	X_predict['implied_prob'] = X_predict['odds'].apply(calculate_implied_prob)
+	X_predict['edge'] = X_predict['probability_over'] - X_predict['implied_prob']
+
+	# Simple status for the CSV
+	X_predict['status'] = np.where(X_predict['probability_over'] > 0.5, 'Over', 'Under')
+
+	# Step 7: Apply the Recommendations Logic
+	def classify_bet(row):
+		# Tier 1 Over: High Edge (Standardized at 0.22)
+		if row['edge'] > edge_threshold:
+			return '🥇 Tier 1 Over (High Value)'
+		
+		# Sharp Under: Edge is significantly negative (Vegas over-projecting)
+		# Note: Fixed from 0.30 to -0.30
+		elif row['edge'] < -0.30:
+			return '🥈 Sharp Under (Contrarian)'
+		
+		# The Dead Zone: Buckets where win rate was unreliable
+		elif -0.20 < row['edge'] < 0.05:
+			return '❌ No Bet (Dead Zone)'
+		
+		else:
+			return 'Neutral'
+
+	X_predict['recommendation'] = X_predict.apply(classify_bet, axis=1)
+
+	# Join names back and return
+	X_predict = pd.concat([prediction_info.reset_index(drop=True), 
+							X_predict.reset_index(drop=True)], axis=1)
+
 	return X_predict
 	
 def main():
 	final_df = preprocessing_data()
 	prop_df = query_props()
-	prop_df = name_match(final_df,prop_df)
-	X_predict = prediction_algorithm(schedule_df_final,final_df)
+	prop_df = name_match(final_df, prop_df)
+    # Merge and Run Predictions
+	final_df = final_df.merge(prop_df[['passer_player_name','odds']], on='passer_player_name')
+	X_predict = prediction_algorithm(schedule_df_final, final_df)
 	import datetime
-	today = datetime.date.today()
-	today = today.strftime("%Y-%m-%d")
-	X_predict[['passer_player_name','week','home_team','away_team','status','probability_over']].sort_values(by='probability_over', ascending=False)[:10].to_csv(fr'Preds/10_over_passing_TDs_{today}.csv')
-	X_predict[['passer_player_name','week','home_team','away_team','status','probability_over']].sort_values(by='probability_over', ascending=True)[:10].to_csv(fr'Preds/10_under_passing_TDs_{today}.csv')
-	
+	today = datetime.date.today().strftime("%Y-%m-%d")
+    # NEW: Filter specifically for your "Profit Zones" for the premium export
+	sharp_plays = X_predict[X_predict['recommendation'].str.contains('Tier 1|Sharp Under')]
+    # Export the "Sharp Report"
+	cols_to_show = ['passer_player_name', 'week', 'home_team', 'away_team', 
+                    'status', 'probability_over', 'edge', 'odds', 'recommendation']
+	sharp_plays[cols_to_show].to_csv(fr'Preds/passing_tds_{today}.csv', index=False)
+    # Keep your existing general exports if needed
+	print(f"Sharp Report Generated with {len(sharp_plays)} high-confidence plays.")
 if __name__ == "__main__":
     main()

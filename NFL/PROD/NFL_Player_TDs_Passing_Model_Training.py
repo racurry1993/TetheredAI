@@ -14,6 +14,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
 import os
+import joblib
 
 os.chdir(r'C:\Users\rfo7799\Desktop\Git\TetheredAI\NFL\PROD')
 
@@ -310,164 +311,136 @@ merged_df.dropna(subset='sport_key', inplace=True)
 merged_df.drop(columns=['event_id','event_name','sport_key','event_commence_time','updated_dttm'], axis=1, inplace=True)
 
 # Identify categorical columns to be encoded
-categorical_cols = ['passer_player_name', 'posteam', 'defteam', 'roof', 'surface']
+from sklearn.model_selection import TimeSeriesSplit
+from sklearn.metrics import mean_absolute_error, mean_poisson_deviance
+from scipy.stats import poisson
 
-# Perform one-hot encoding
+# Identify categorical columns to be encoded
+#categorical_cols = ['passer_player_name', 'posteam', 'defteam', 'roof', 'surface']
+categorical_cols = ['roof', 'surface']
+
+# 2. PERFORM ENCODING
 final_df = pd.get_dummies(merged_df, columns=categorical_cols, drop_first=True)
-final_df.drop(['gameday','market_type'], axis=1, inplace=True)
-final_df['Status'] = (final_df['pass_touchdown'] > final_df['point_value']).astype(int)
 
-X = final_df.drop(['pass_touchdown','week','season','point_value','Status'], axis=1)  # Features
-y = final_df['Status']
+# 3. DEFINE FEATURES (Drop EVERYTHING that identifies a specific player or team)
+# We want the model to learn: "If a QB has an EPA of 0.2 and 30 attempts, they score X"
+# NOT: "If a QB is named Mahomes, they score X"
+cols_to_drop = [
+    'pass_touchdown', 'week', 'season', 'point_value', 'Status', 'odds',
+    'passer_player_name', 'posteam', 'defteam', 'gameday', 'market_type'
+]
 
-# Split data into training and testing sets (80/20 split)
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+from scipy.stats import poisson
+from sklearn.model_selection import TimeSeriesSplit, RandomizedSearchCV
+from xgboost import XGBRegressor
+# Ensure we aren't keeping the dummy name columns
+# This regex removes any column that starts with 'passer_player_name_' or 'posteam_'
+X = final_df.drop(columns=[c for c in final_df.columns if any(x in c for x in cols_to_drop)])
+X = X.loc[:, ~X.columns.str.startswith(('passer_player_name_', 'posteam_', 'defteam_'))]
 
-from sklearn.model_selection import GridSearchCV
-from sklearn.metrics import (
-    accuracy_score, precision_score, recall_score, f1_score, 
-    roc_auc_score, roc_curve
-)
+y = final_df['pass_touchdown']
 
-# Instantiate the models
-models = {
-    'RandomForest': RandomForestClassifier(random_state=42),
-    'LightGBM': LGBMClassifier(random_state=42),
-    'XGBoost': XGBClassifier(random_state=42),
-    'LR': LogisticRegression(random_state=42),
-}
+tscv = TimeSeriesSplit(n_splits=5)
 
-roc_data = {}
-results = {}
+mae_scores = []
+deviance_scores = []
+win_rates = []
 
-for name, model in models.items():
-    model.fit(X_train, y_train)
-    
-    # 1. Get predicted class labels
-    y_pred = model.predict(X_test)
-    
-    # 2. Get predicted probabilities for the positive class (required for AUC-ROC and ROC Curve)
-    if hasattr(model, "predict_proba"):
-        y_proba = model.predict_proba(X_test)[:, 1]
-    else:
-        # Fallback (though all models above have predict_proba)
-        y_proba = y_pred 
-    
-    # Calculate classification metrics
-    accuracy = accuracy_score(y_test, y_pred)
-    precision = precision_score(y_test, y_pred, zero_division=0)
-    recall = recall_score(y_test, y_pred, zero_division=0)
-    f1 = f1_score(y_test, y_pred, zero_division=0)
-    
-    # Calculate AUC-ROC
-    try:
-        auc_roc = roc_auc_score(y_test, y_proba)
-    except ValueError:
-        auc_roc = np.nan 
+print("--- Starting Time-Series Validation (Poisson) ---")
 
-    # Store metrics
-    results[name] = {
-        'Accuracy': accuracy, 
-        'Precision': precision, 
-        'Recall': recall, 
-        'F1-Score': f1,
-        'AUC-ROC': auc_roc
+def run_tuned_edge_backtest(X, y, df, line=1.5):
+    def get_implied_prob(odds):
+        if odds < 0:
+            return abs(odds) / (abs(odds) + 100)
+        else:
+            return 100 / (odds + 100)
+
+    # 1. Define the Parameter Grid for Poisson Regression
+    param_grid = {
+        'n_estimators': [100, 200, 300],
+        'learning_rate': [0.01, 0.05, 0.1],
+        'max_depth': [3, 5, 7],
+        'subsample': [0.8, 1.0],
+        'colsample_bytree': [0.8, 1.0],
+        'gamma': [0, 1, 5]
     }
+
+    # 2. Setup Time-Series Split
+    tscv = TimeSeriesSplit(n_splits=5)
+    all_results = []
     
-    # Calculate ROC Curve points (FPR, TPR, thresholds)
-    fpr, tpr, _ = roc_curve(y_test, y_proba)
-    roc_data[name] = {'fpr': fpr, 'tpr': tpr, 'auc': auc_roc}
+    # We will track the best params for each fold to see if they stay consistent
+    best_params_history = []
 
+    print("Starting Backtest with Hyper-parameter Tuning...")
 
-# -----------------------------------------------
-# 1. Print the comparison results
-# -----------------------------------------------
-results_df = pd.DataFrame(results).T.sort_values(by='AUC-ROC', ascending=False)
-print("--- Classification Model Comparison ---")
-print(results_df)
+    for train_index, test_index in tscv.split(X):
+        X_train, X_test = X.iloc[train_index], X.iloc[test_index]
+        y_train, y_test = y.iloc[train_index], y.iloc[test_index]
+        test_odds = df.iloc[test_index]['odds']
+        
+        # 3. Initialize the Poisson Model
+        base_model = XGBRegressor(objective='count:poisson', random_state=42)
 
-best_model_name = results_df.index[0]
-print(f"\nThe best performing model based on AUC-ROC is: {best_model_name}")
+        # 4. Run Randomized Search INSIDE the fold
+        # Note: cv=TimeSeriesSplit ensures the tuning itself doesn't leak data
+        search = RandomizedSearchCV(
+            estimator=base_model,
+            param_distributions=param_grid,
+            n_iter=15, 
+            scoring='neg_mean_poisson_deviance', # Optimization target for Poisson
+            cv=TimeSeriesSplit(n_splits=3),
+            verbose=0,
+            n_jobs=-1
+        )
+        
+        search.fit(X_train, y_train)
+        best_model = search.best_estimator_
+        best_params_history.append(search.best_params_)
 
-param_grid = {
-    'n_estimators': [100, 200, 300],
-    'max_depth': [10, 20, None],
-    'min_samples_split': [2, 5, 10],
-    'min_samples_leaf': [1, 2, 4],
-    'max_features': ['auto', 'sqrt']
-}
+        # 5. Predict with the Optimized Model
+        lambdas = best_model.predict(X_test)
+        prob_over = 1 - poisson.cdf(line, lambdas)
+        
+        fold_df = pd.DataFrame({
+            'actual_tds': y_test,
+            'model_prob': prob_over,
+            'vegas_odds': test_odds
+        })
+        
+        fold_df['implied_prob'] = fold_df['vegas_odds'].apply(get_implied_prob)
+        fold_df['edge'] = fold_df['model_prob'] - fold_df['implied_prob']
+        fold_df['won_bet'] = ((fold_df['model_prob'] > 0.5) & (fold_df['actual_tds'] > line)) | \
+                             ((fold_df['model_prob'] < 0.5) & (fold_df['actual_tds'] <= line))
+        
+        all_results.append(fold_df)
+        print(f"Fold complete. Best Params: {search.best_params_}")
 
-# Instantiate the RandomForest model
-rf = RandomForestClassifier(random_state=42)
+    # Combine results
+    full_backtest = pd.concat(all_results)
+    
+    # Performance Metrics
+    high_edge_plays = full_backtest[full_backtest['edge'].abs() > 0.10]
+    avg_win_rate = full_backtest['won_bet'].mean()
+    high_edge_win_rate = high_edge_plays['won_bet'].mean() if len(high_edge_plays) > 0 else 0
 
-# Perform Grid Search with cross-validation
-grid_search_rf = GridSearchCV(estimator=rf, param_grid=param_grid,
-                              cv=5, scoring='neg_root_mean_squared_error',
-                              n_jobs=-1, verbose=1)
+    print("\n--- TUNED BACKTEST RESULTS ---")
+    print(f"Average Win Rate: {avg_win_rate:.2%}")
+    print(f"High Confidence (>10% Edge) Win Rate: {high_edge_win_rate:.2%}")
 
-grid_search_rf.fit(X_train, y_train)
+    # 6. Final Fit: Re-tune on ALL data for production use
+    final_search = RandomizedSearchCV(
+        XGBRegressor(objective='count:poisson'),
+        param_grid, n_iter=20, cv=tscv, scoring='neg_mean_poisson_deviance'
+    )
+    final_search.fit(X, y)
+    
+    # Save tuned model and threshold
+    joblib.dump(final_search.best_estimator_, 'nfl_pass_td_tuned_model.joblib')
+    
+    return full_backtest, final_search.best_params_, final_search, X_train
 
-# Get the best model and its parameters
-tuned_rf = grid_search_rf.best_estimator_
-rf_best_params = grid_search_rf.best_params_
-print(f"Best parameters found for RandomForest: {grid_search_rf.best_params_}")
-
-from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, confusion_matrix
-
-rf_tuned_model = RandomForestClassifier(**rf_best_params, random_state=42)
-
-rf_tuned_model.fit(X_train, y_train)
-y_pred = rf_tuned_model.predict(X_test)
-
-# Calculate metrics
-accuracy = accuracy_score(y_test, y_pred)
-f1 = f1_score(y_test, y_pred, zero_division=0)
-y_proba = rf_tuned_model.predict_proba(X_test)[:, 1]
-auc_roc = roc_auc_score(y_test, y_proba)
-conf_matrix = confusion_matrix(y_test, y_pred)
-
-print('Accuracy: ', accuracy)
-print('F1: ', f1)
-print('Confusion Matrix: ', conf_matrix)
-
-# --- 1. ADD FEATURE IMPORTANCE SCORING ---
-feature_importances_df = pd.DataFrame(
-    rf_tuned_model.feature_importances_, 
-    index=X_train.columns, 
-    columns=['Importance'] # Only one column name at this step
-)
-
-feature_importances_df = feature_importances_df.sort_values(
-    by='Importance', 
-    ascending=False
-).reset_index()
-# Rename the columns to your requested names
-feature_importances_df.columns = ['Feature', 'Importance']
-sns.barplot(data=feature_importances_df[:15], x='Importance', y='Feature', palette='magma')
-plt.title("Most Important Features in Dataset")
-plt.xlabel('Feature Importance')
-plt.ylabel('Feature')
-plt.savefig(r'Images/Most Impactful PassTDs Features.png')
-
-top_feature_1 = feature_importances_df.loc[0, 'Feature']
-top_feature_2 = feature_importances_df.loc[1, 'Feature']
-plt.figure(figsize=(10, 7))
-sns.scatterplot(data=final_df, x=top_feature_1, y=top_feature_2, hue='Status', palette='viridis', s=70, alpha=0.7, legend='full')
-plt.title(
-    f'Relationship Between Top Features: {top_feature_1} vs {top_feature_2}',
-    fontsize=16, 
-    fontweight='bold', 
-    pad=20
-)
-plt.xlabel(top_feature_1, fontsize=12)
-plt.ylabel(top_feature_2, fontsize=12)
-
-# 4. Enhance the appearance and legend
-plt.grid(True, linestyle='--', alpha=0.5) # Add a light grid
-plt.legend(title='Outcome (Status)', loc='best', labels=['Failure (0)', 'Success (1)'])
-
-plt.tight_layout()
-plt.savefig(r'Images/Top 2 PassTDs Features Plotted.png')
+results, final_params, model, train_X = run_tuned_edge_backtest(X, y, final_df)
 
 top_n = 18
 min_entries = 3
@@ -644,7 +617,6 @@ import joblib
 #joblib.dump(rf_tuned_model, 'rf_passing_model.joblib')
 
 # Save the tuned Random Forest model for rushing yards
-joblib.dump(rf_tuned_model, 'rf_pass_tds_model.joblib')
-X_train.to_csv(r'model_trained_on_tds_data.csv')
+train_X.to_csv(r'model_trained_on_tds_data.csv')
 
 print("All optimal models have been saved to disk.")
