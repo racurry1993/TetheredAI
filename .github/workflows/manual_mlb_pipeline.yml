@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      APP_DIR: mlb_betting_app
+      APP_DIR: MLB/mlb_betting_app
       ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
       ODDS_DB_PATH: data/odds.db
       DATA_DIR: data
