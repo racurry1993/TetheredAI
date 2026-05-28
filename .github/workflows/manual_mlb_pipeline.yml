@@ -1,5 +1,8 @@
 name: Manual MLB Pipeline
 
+env:
+  APP_DIR: mlb_betting_app
+
 on:
   workflow_dispatch:
     inputs:
@@ -47,6 +50,7 @@ jobs:
 
       - name: Install dependencies
         run: |
+          cd "$APP_DIR"
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
