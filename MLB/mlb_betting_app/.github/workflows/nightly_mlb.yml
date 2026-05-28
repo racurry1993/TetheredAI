@@ -1,0 +1,48 @@
+name: Nightly MLB Refresh
+
+on:
+  workflow_dispatch:
+  schedule:
+    # GitHub cron is UTC. This is 5:20 AM Central during daylight saving time.
+    - cron: "20 10 * * *"
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+      ODDS_DB_PATH: data/odds.db
+      DATA_DIR: data
+      MODEL_DIR: models
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run daily refresh
+        run: |
+          python scripts/00_init_db.py
+          python scripts/01_fetch_odds.py --sport baseball_mlb --regions us --markets h2h,spreads,totals
+          python scripts/02_fetch_mlb_games.py --days-back 730 --days-forward 14
+          python scripts/03_build_features.py
+          python scripts/04_train_moneyline_model.py --tune --calibrate --min-rows 100
+          python scripts/05_score_today.py --days-forward 3
+
+      - name: Commit updated artifacts
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/odds.db data/processed data/predictions models || true
+          git commit -m "Nightly MLB refresh" || echo "No changes to commit"
+          git push || true

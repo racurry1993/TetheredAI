@@ -298,6 +298,19 @@ name_map = valid_matches.set_index('prop_name')['final_name_match'].to_dict()
 
 # Create the common key column in prop_df using the map
 prop_df['passer_player_name'] = prop_df['player_name'].map(name_map)
+from dateutil import parser
+
+# Define your timezone mapping
+tz_mapping = {"EDT": -14400, "EST": -18000} # Offsets in seconds
+
+# Apply the parser to each string in the column
+prop_df['event_commence_time'] = prop_df['event_commence_time'].apply(
+    lambda x: parser.parse(x, tzinfos=tz_mapping)
+)
+prop_df['event_commence_time'] = pd.to_datetime(
+    prop_df['event_commence_time'], 
+    utc=True
+)
 prop_df['gameday'] = pd.to_datetime(prop_df['event_commence_time']).dt.strftime('%Y-%m-%d')
 # Merge the DataFrames on the newly created common key
 merged_df = final_df.merge(
@@ -308,7 +321,7 @@ merged_df = final_df.merge(
 
 merged_df.dropna(subset='sport_key', inplace=True)
 
-merged_df.drop(columns=['event_id','event_name','sport_key','event_commence_time','updated_dttm'], axis=1, inplace=True)
+merged_df.drop(columns=['event_id','event_name','sport_key','event_commence_time','updated_dttm'], inplace=True)
 
 # Identify categorical columns to be encoded
 from sklearn.model_selection import TimeSeriesSplit
@@ -441,6 +454,32 @@ def run_tuned_edge_backtest(X, y, df, line=1.5):
     return full_backtest, final_search.best_params_, final_search, X_train
 
 results, final_params, model, train_X = run_tuned_edge_backtest(X, y, final_df)
+
+# Assuming 'full_backtest' is the results DataFrame from your run_edge_backtest function
+def save_optimal_threshold(full_backtest, target_win_rate=0.60):
+    # Sort by edge to find the threshold
+    sorted_edges = full_backtest.sort_values(by='edge', ascending=False)
+    
+    # Simple logic to find the edge value where the rolling win rate hits your target
+    sorted_edges['rolling_win_rate'] = sorted_edges['won_bet'].expanding().mean()
+    
+    # Find the edge threshold that satisfies the target win rate
+    # We look for the smallest edge that still gives us our 60% (or target) WR
+    threshold_df = sorted_edges[sorted_edges['rolling_win_rate'] >= target_win_rate]
+    
+    if not threshold_df.empty:
+        # Get the edge value at this point
+        optimal_threshold = threshold_df['edge'].min()
+    else:
+        # Fallback to a safe default if data is thin
+        optimal_threshold = 0.20
+        
+    print(f"Optimal Edge Threshold found: {optimal_threshold:.4f}")
+    joblib.dump(optimal_threshold, 'edge_threshold.joblib')
+    return optimal_threshold
+
+# Call this after your backtest
+save_optimal_threshold(results)
 
 top_n = 18
 min_entries = 3
@@ -612,9 +651,6 @@ plt.grid(axis='y', linestyle='--', alpha=0.6)
 plt.tight_layout()
 plt.savefig(r'Images/Composite Score Tiered PassTDs.png')
 
-import joblib
-# Save the tuned LGBM model for rushing yards
-#joblib.dump(rf_tuned_model, 'rf_passing_model.joblib')
 
 # Save the tuned Random Forest model for rushing yards
 train_X.to_csv(r'model_trained_on_tds_data.csv')

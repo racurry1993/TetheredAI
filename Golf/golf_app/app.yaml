@@ -1,0 +1,12 @@
+runtime: python311
+instance_class: F1
+
+entrypoint: gunicorn -b :$PORT app:app --workers 1 --threads 8 --timeout 120
+
+env_variables:
+  SECRET_KEY: "7f9a12c8b3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2"
+  GAE_ENV: "standard"
+
+# This is the correct way to link Cloud SQL for App Engine Standard
+beta_settings:
+  cloud_sql_instances: amateurgolfer:us-central1:golferhandicap

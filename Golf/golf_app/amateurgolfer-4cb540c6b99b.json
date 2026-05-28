@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "amateurgolfer",
+  "private_key_id": "4cb540c6b99bbe484e08ab136b66ddf8522c953e",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvwIBADANBgkqhkiG9w0BAQEFAASCBKkwggSlAgEAAoIBAQDaHOqsWcYtZvPI\naekL+0GfWTGePnMvibABNoDXLeWrhh4zd5OtlsSKJe9H+qhMe9nHK9Ah5QZTHXi7\nopOXy8pS44ZNiOF90+jp0Uzb4hPH3735AKDvD4ajmWMQ0hTj2l+g7R9LaLG3hKJZ\n0f/YO0rV4rgBIr7UOG0iwx2DCZjko6UB/J1SOxYk/qMOmXcDszdRyU8UGUVLg6sZ\nlA+wyc0StU/AYqISYIMB1SQM1axf/UzXdPqcyDKvbOaA3BVpVSCagbxNM6uwapc8\nN1J8pJIsGq+V4t0vkaGnl74d1L6QEJ9yjfJNNY9z/cYoDU7gAqeu6Gkdce10DXug\n1q7ZaYVPAgMBAAECggEAH9z1k3QR9XQCzRZbyzpLXeID06A/54PvyF2T+Ntln+cZ\n5l7jngpWb/AWwqclivbU27nUz/7LK700dATOFvDYf79pUU5b0qvwbKf82GpwhVR0\nRjoHSKU2ABRaWoy2LIssSTAa0ENdIvgnV4PMImSXDCPwyYmv4wTTPK7QUuJGCbBx\nSwzabhgIQV0ZpzcqqS/wjRMlDvzm5I/EErEHZmzgPVAZMNH/rK/hXHCtHbx0KmyS\nyIgkFuu90NnkbwdP53FvPIUF4McBAHKGHFJO/ZqTsbUMGN5thK+cn8V6Q7RdeCS6\nLrbmOqom+yA1cphryx8Qr//ZZ/fEAUgzLuU9CRk80QKBgQDzHv3wb7LwXtmsfkt4\nUMRFhuVFlA0NFORe8qm1EzzbUrxPeRFhDU5+j2IO2uE42FKeefZFeT5xTuqKZpuU\nDD27O1EUqkOPLv3KAcbAwSWj7k7uhdwkMnckRNS8MtXHmgLhE7cnhk5wUGSCylcW\nVnVYcelgwStvwwdmmhXFi0T/iwKBgQDlqskM9bfXOxCdPygHWluDHnw7f6yoQ7Tw\nbLp9Eelj67Vx13Z2KKUwIVJ5FNIe9R3k79cJcgxvszG723mzuEoTOwgpRdzCFrH8\nzR5/qLyOZqInQvoXZr8B0HFYaf1h52U5pw8iAvLXw9dIUWpTLoJaAywGENb9Xo4Q\njvOA6CcJzQKBgQDJyqODeXLQSCnsHjeN+ZuvCbQq+CONBBY5KLjrbrhIYneijx55\nq43HRkNhiRL/F64bk6dxKp1Fdvb9QQVI8JAcY7N8r4W7xoknrinFu4r+ccJaAAkk\nki6JkAfy3U7LiW1yW+bdi4B3gIKsfD2kcMadTo8im7Lt5Laz1pjTijEO2QKBgQCB\n0CWxuJWABzed2dvTRCRjmXCY5NJ/jT2Rg7NpDB3CR7GYNjQUF2c/LCaEn9sgemW6\nSEJgaWFUJZIf368LgUgFVKGJSp676b4S6RGrEIH7b1GKJZZcccvWx625TrdUhkk1\n7BJmpAoFIQHnM3WIrMoq/I3+o7gRIEfmXhaOrymZpQKBgQCn4YOvEE2mjZnQappp\nbQbT6u0abx2i9v3O0VTGRhaHukmc17W1PD8x/BxeTYR/kbkm5Q5BfWUPBLPvpvqh\nbreAGuuHA2+nQms6+OymRpiACnflALP1unP/Sk3+Caf9xByM/ZyrljDFw21hiwT6\nbm3MzWYFk/GIRzl+Nz1UAqFFuw==\n-----END PRIVATE KEY-----\n",
+  "client_email": "bq-golf-logger@amateurgolfer.iam.gserviceaccount.com",
+  "client_id": "108681632322567885610",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/bq-golf-logger%40amateurgolfer.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}

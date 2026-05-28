@@ -1,0 +1,10 @@
+PostGre: golferhandicap
+PWD: Z%<"0"#5v=KxDFEe
+
+gcloud builds submit --tag gcr.io/amateurgolfer/amateur-golfer-app
+
+gcloud run deploy amateur-golfer-app --image gcr.io/amateurgolfer/amateur-golfer-app --region us-central1 --allow-unauthenticated --add-cloudsql-instances amateurgolfer:us-central1:golferhandicap --timeout=300
+
+gcloud app deploy
+
+Youtube API Key: AIzaSyDbBiosrdDlNBGgBZ5od_rx4UJNsVaK2_g

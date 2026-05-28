@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard | Pro-Am Performance</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { background-color: #f4f7f6; min-height: 100vh; font-family: 'Segoe UI', sans-serif; }
+        .navbar { background: #1e3a8a; }
+        .stat-card { border: none; border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); background: white; }
+        .priority-card { border-left: 5px solid #3b82f6; transition: transform 0.2s; border-radius: 10px; background: white; padding: 1.25rem; margin-bottom: 1rem; box-shadow: 0 2px 8px rgba(0,0,0,0.04); position: relative; }
+        .priority-card:hover { transform: translateY(-3px); }
+        .priority-high { border-left-color: #ef4444; }
+        .priority-strength { border-left-color: #10b981; }
+        .btn-primary { background-color: #1e3a8a; border: none; border-radius: 10px; font-weight: 600; }
+        .chart-container { position: relative; height: 380px; width: 100%; }
+        .metric-label { font-size: 0.75rem; font-weight: 700; color: #6c757d; text-transform: uppercase; letter-spacing: 1px; }
+        .badge-gap { background-color: #fee2e2; color: #ef4444; border-radius: 6px; padding: 4px 8px; font-size: 0.8rem; font-weight: bold; }
+        .badge-strength { background-color: #d1fae5; color: #059669; border-radius: 6px; padding: 4px 8px; font-size: 0.8rem; font-weight: bold; }
+        .ml-summary { background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); color: white; border: none; position: relative; overflow: hidden; }
+        .btn-edit { color: #3b82f6; text-decoration: none; font-weight: bold; font-size: 0.8rem; margin-right: 10px; cursor: pointer; }
+        .ai-watermark { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); font-size: 5rem; font-weight: 900; opacity: 0.15; pointer-events: none; letter-spacing: -5px; }
+        .prediction-box { border-radius: 12px; background: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; min-height: 100px; }
+        .drill-link { font-size: 0.75rem; text-decoration: none; color: #3b82f6; font-weight: 600; display: inline-flex; align-items: center; margin-top: 8px; background: none; border: none; padding: 0; }
+        .drill-link:hover { text-decoration: underline; color: #1e3a8a; }
+        .highlight-ai { background: rgba(255, 255, 255, 0.2); padding: 2px 6px; border-radius: 4px; font-weight: 600; }
+        /* Video Modal Styles */
+        .video-item { transition: background 0.2s; border-radius: 8px; margin-bottom: 10px; border: 1px solid #eee; }
+        .video-item:hover { background: #f8fafc; }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-dark shadow-sm mb-4">
+    <div class="container">
+        <span class="navbar-brand fw-bold">⛳ Pro-Am Engine</span>
+        <div class="d-flex align-items-center">
+            <span class="text-white me-3 small">Player: {{ current_user.name }}</span>
+            <a href="{{ url_for('logout') }}" class="btn btn-sm btn-outline-light px-3">Logout</a>
+        </div>
+    </div>
+</nav>
+
+<div class="container pb-5">
+    <div class="card stat-card ml-summary p-4 mb-4">
+        <div class="position-relative z-1">
+            <h4 class="fw-bold">Intelligent Performance Analysis</h4>
+            <p class="mb-0 opacity-90" style="max-width: 85%;">
+                This platform utilizes <span class="highlight-ai">Artificial Intelligence and Machine Learning</span> to derive deep insights from your play. By leveraging statistical modeling, we identify and isolate "leaks" against target benchmarks.
+            </p>
+        </div>
+        <div class="ai-watermark">AI</div>
+    </div>
+
+    <div class="card stat-card p-4 mb-4">
+        <h5 class="fw-bold mb-3">AI Predictive "What-If" Scenarios</h5>
+        <div class="row g-3">
+            {% if priorities and rounds|length >= 3 %}
+                {% for p in priorities[:3] %}
+                <div class="col-md-4">
+                    <div class="prediction-box shadow-sm">
+                        <span class="metric-label d-block mb-1">{{ p.category }} Impact</span>
+                        <p class="mb-0 small text-dark">
+                            If you reach your <b>{{ p.target|round(1) }}</b> target, your projected score drops by 
+                            <b>{{ (p.gap * 0.15)|round(1)|abs }}</b> strokes.
+                        </p>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="col-12 text-center py-3">
+                    <p class="text-muted small">You need at least 3 rounds for the Engine to generate predictive impact scenarios.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <h5 class="fw-bold mb-3">Engine Priorities: Path to {{ current_user.target_handicap }} HCP</h5>
+            <div class="row row-cols-1 row-cols-md-2 g-3 mb-4">
+                {% for p in priorities %}
+                <div class="col">
+                    <div class="priority-card {% if p.gap > 0 %}priority-high{% else %}priority-strength{% endif %}">
+                        <div class="metric-label">{{ p.category }}</div>
+                        <div class="d-flex justify-content-between align-items-end">
+                            <div>
+                                <h4 class="fw-bold mb-0">{{ p.user|round(1) }}{% if p.category in ['GIR', 'FIR', 'Up & Down'] %}%{% endif %}</h4>
+                                {% if p.gap > 0 %}
+                                    <button class="drill-link" onclick="openDrillModal('{{ p.category }}', '{{ p.search_query }}')">
+                                        📺 View Top 5 Drills
+                                    </button>
+                                {% endif %}
+                            </div>
+                            <div class="text-end">
+                                <span class="{% if p.gap > 0 %}badge-gap{% else %}badge-strength{% endif %}">
+                                    {% if p.gap > 0 %}Needs Work{% else %}Strength{% endif %}
+                                </span>
+                                <div class="small text-muted mt-1">
+                                    Target: {{ p.target|round(1) }}{% if p.category in ['GIR', 'FIR', 'Up & Down'] %}%{% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="card stat-card p-4 mb-4">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h5 class="fw-bold mb-0">Visual Intelligence</h5>
+                    <ul class="nav nav-pills small" id="chartTabs">
+                        <li class="nav-item"><button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tab-benchmark">Benchmark</button></li>
+                        <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-trends">Trends</button></li>
+                        <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-correlation">Impact</button></li>
+                    </ul>
+                </div>
+
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="tab-benchmark">
+                        <div class="chart-container"><canvas id="performanceChart"></canvas></div>
+                    </div>
+                    <div class="tab-pane fade" id="tab-trends">
+                        <div class="mb-3 d-flex align-items-center">
+                            <label class="small fw-bold me-2">Metric:</label>
+                            <select class="form-select form-select-sm w-auto" id="trendSelector" onchange="updateTrendChart()">
+                                <option value="gir">GIR %</option>
+                                <option value="putts">Putts</option>
+                                <option value="fir">FIR %</option>
+                                <option value="dist">Drive Dist</option>
+                            </select>
+                        </div>
+                        <div class="chart-container"><canvas id="trendChart"></canvas></div>
+                    </div>
+                    <div class="tab-pane fade" id="tab-correlation">
+                        <div class="mb-3 d-flex align-items-center">
+                            <label class="small fw-bold me-2">Analyze vs Score:</label>
+                            <select class="form-select form-select-sm w-auto" id="corrSelector" onchange="updateCorrChart()">
+                                <option value="score_gir">GIR %</option>
+                                <option value="score_putts">Putts</option>
+                                <option value="score_fir">FIR %</option>
+                            </select>
+                        </div>
+                        <div class="chart-container"><canvas id="corrChart"></canvas></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card stat-card p-4">
+                <h5 class="fw-bold mb-3">Recent Rounds</h5>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle small">
+                        <thead>
+                            <tr class="metric-label"><th>Date</th><th>Score</th><th>GIR</th><th>FIR</th><th>Putts</th><th>Action</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for r in rounds %}
+                            <tr>
+                                <td>{{ r.date.strftime('%Y-%m-%d') }}</td>
+                                <td class="fw-bold">{{ r.score }}</td>
+                                <td>{{ r.gir }}</td>
+                                <td>{{ r.fir }}</td>
+                                <td>{{ r.putts }}</td>
+                                <td><span class="btn-edit" onclick="editRound({{ r.id }}, '{{ r.date.strftime('%Y-%m-%d') }}', {{ r.score }}, {{ r.gir }}, {{ r.fir }}, {{ r.putts }}, {{ r.up_downs_att }}, {{ r.up_downs_make }}, {{ r.avg_drive_dist }})">Edit</span></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card stat-card p-4 mb-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="metric-label mb-0">Quick Entry</h6>
+                    <button type="button" class="btn btn-outline-secondary btn-xs py-0" onclick="addRow()" style="font-size: 0.7rem;">+ Row</button>
+                </div>
+                <form action="{{ url_for('add_round_batch') }}" method="POST">
+                    <div id="batchContainer">
+                        <div class="batch-row border-bottom pb-3 mb-3">
+                            <div class="row g-2">
+                                <div class="col-7"><input type="date" name="date[]" class="form-control form-control-sm" value="{{ today }}"></div>
+                                <div class="col-5"><input type="number" name="score[]" class="form-control form-control-sm" placeholder="Score" required></div>
+                                <div class="col-4"><input type="number" name="gir[]" class="form-control form-control-sm" placeholder="GIR"></div>
+                                <div class="col-4"><input type="number" name="putts[]" class="form-control form-control-sm" placeholder="Putts"></div>
+                                <div class="col-4"><input type="number" step="0.1" name="dist[]" class="form-control form-control-sm" placeholder="Dist"></div>
+                                <input type="hidden" name="fir[]" value="0">
+                                <input type="hidden" name="ud_att[]" value="0">
+                                <input type="hidden" name="ud_make[]" value="0">
+                            </div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm w-100">Analyze Rounds</button>
+                </form>
+            </div>
+
+            <div class="card stat-card p-4 text-center">
+                <h6 class="metric-label mb-3">Target Handicap</h6>
+                <form action="{{ url_for('update_target') }}" method="POST">
+                    <div class="input-group input-group-sm">
+                        <input type="number" name="target_hcp" class="form-control text-center fw-bold" value="{{ current_user.target_handicap }}">
+                        <button class="btn btn-primary" type="submit">Set</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="drillModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title fw-bold" id="drillModalLabel">Training Drills</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4" id="videoResults">
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="mt-2 text-muted">Analyzing YouTube for top-rated drills...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="editModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form id="editForm" method="POST" class="modal-content">
+            <div class="modal-header"><h5 class="fw-bold">Edit Round</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body row g-3">
+                <div class="col-6"><label class="small fw-bold">Date</label><input type="date" name="date" id="e_date" class="form-control"></div>
+                <div class="col-6"><label class="small fw-bold">Score</label><input type="number" name="score" id="e_score" class="form-control"></div>
+                <div class="col-4"><label class="small fw-bold">GIR</label><input type="number" name="gir" id="e_gir" class="form-control"></div>
+                <div class="col-4"><label class="small fw-bold">FIR</label><input type="number" name="fir" id="e_fir" class="form-control"></div>
+                <div class="col-4"><label class="small fw-bold">Putts</label><input type="number" name="putts" id="e_putts" class="form-control"></div>
+                <div class="col-4"><label class="small fw-bold">U&D Att</label><input type="number" name="ud_att" id="e_ud_att" class="form-control"></div>
+                <div class="col-4"><label class="small fw-bold">U&D Make</label><input type="number" name="ud_make" id="e_ud_make" class="form-control"></div>
+                <div class="col-4"><label class="small fw-bold">Drive Dist</label><input type="number" step="0.1" name="dist" id="e_dist" class="form-control"></div>
+            </div>
+            <div class="modal-footer">
+                <a id="deleteBtn" href="#" class="btn btn-link text-danger btn-sm me-auto">Delete Round</a>
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    function addRow() {
+        const container = document.getElementById('batchContainer');
+        const firstRow = container.querySelector('.batch-row');
+        const newRow = firstRow.cloneNode(true);
+        newRow.querySelectorAll('input').forEach(i => { if(i.type !== 'date' && i.type !== 'hidden') i.value = ''; });
+        container.appendChild(newRow);
+    }
+
+    function editRound(id, date, score, gir, fir, putts, att, make, dist) {
+        document.getElementById('editForm').action = '/edit_round/' + id;
+        document.getElementById('deleteBtn').href = '/delete_round/' + id;
+        document.getElementById('e_date').value = date;
+        document.getElementById('e_score').value = score;
+        document.getElementById('e_gir').value = gir;
+        document.getElementById('e_fir').value = fir;
+        document.getElementById('e_putts').value = putts;
+        document.getElementById('e_ud_att').value = att;
+        document.getElementById('e_ud_make').value = make;
+        document.getElementById('e_dist').value = dist;
+        new bootstrap.Modal(document.getElementById('editModal')).show();
+    }
+
+    async function openDrillModal(category, searchQuery) {
+        const modal = new bootstrap.Modal(document.getElementById('drillModal'));
+        const container = document.getElementById('videoResults');
+        document.getElementById('drillModalLabel').innerText = `Top Drills: ${category}`;
+        
+        // Loader
+        container.innerHTML = `
+            <div class="text-center py-5">
+                <div class="spinner-border text-success" role="status"></div>
+                <p class="mt-2 text-muted">Fetching best drills for "${searchQuery}"...</p>
+            </div>`;
+        modal.show();
+
+        const API_KEY = 'AIzaSyDbBiosrdDlNBGgBZ5od_rx4UJNsVaK2_g';
+        // We refine the query to ensure professional golf results
+        const fullQuery = encodeURIComponent(`best golf ${searchQuery} drills`);
+        const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=5&q=${fullQuery}&type=video&order=relevance&key=${API_KEY}`;
+
+        try {
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (!data.items || data.items.length === 0) {
+                container.innerHTML = `<div class="alert alert-warning">No videos found for this specific query.</div>`;
+                return;
+            }
+
+            const videoHtml = data.items.map(item => {
+                const v = item.snippet;
+                const videoId = item.id.videoId;
+                return `
+                    <a href="https://www.youtube.com/watch?v=${videoId}" target="_blank" class="list-group-item list-group-item-action d-flex align-items-center py-3 mb-2 border rounded shadow-sm video-item">
+                        <img src="${v.thumbnails.medium.url}" style="width:120px; border-radius:8px;" class="me-3">
+                        <div class="flex-grow-1">
+                            <h6 class="mb-1 fw-bold">${v.title}</h6>
+                            <p class="mb-0 small text-muted">${v.channelTitle}</p>
+                        </div>
+                        <div class="ms-2 text-success fw-bold">▶</div>
+                    </a>
+                `;
+            }).join('');
+
+            container.innerHTML = `
+                <div class="list-group list-group-flush">${videoHtml}</div>
+                <div class="text-center mt-3">
+                    <small class="text-muted">Results based on your recent performance gaps.</small>
+                </div>`;
+
+        } catch (error) {
+            console.error("YouTube API Error:", error);
+            container.innerHTML = `<div class="alert alert-danger">Error connecting to YouTube. Please try again later.</div>`;
+        }
+    }
+
+    const trendData = {{ trends|tojson }};
+    const sharedOptions = { 
+        responsive: true, 
+        maintainAspectRatio: false, 
+        plugins: { legend: { position: 'bottom' } },
+        layout: { padding: { top: 30 } }
+    };
+
+    const deltaPlugin = {
+        id: 'deltaPlugin',
+        afterDatasetsDraw(chart) {
+            const { ctx, data, chartArea: { top }, scales: { x, y } } = chart;
+            const dataset1 = data.datasets[0].data;
+            const dataset2 = data.datasets[1].data;
+            
+            ctx.save();
+            ctx.font = 'bold 12px sans-serif';
+            ctx.textAlign = 'center';
+
+            dataset1.forEach((val, i) => {
+                const target = dataset2[i];
+                let diff = val - target;
+                let isBetter;
+                if (i === 3) { isBetter = val <= target; } else { isBetter = val >= target; }
+                const color = isBetter ? '#059669' : '#ef4444';
+                const sign = diff > 0 ? '+' : '';
+                const text = sign + diff.toFixed(1);
+                ctx.fillStyle = color;
+                ctx.fillText(text, x.getPixelForValue(i), y.getPixelForValue(Math.max(val, target)) - 15);
+            });
+            ctx.restore();
+        }
+    };
+
+    new Chart(document.getElementById('performanceChart'), {
+        type: 'bar',
+        plugins: [deltaPlugin],
+        data: {
+            labels: ['GIR %', 'FIR %', 'Up & Down %', 'Putts', 'Drive Dist'],
+            datasets: [
+                { 
+                    label: 'Your Avg', 
+                    data: [
+                        {{ user_avgs.GIR|round(1) }}, 
+                        {{ user_avgs.FIR|round(1) }}, 
+                        {{ user_avgs['Up & Down']|round(1) }}, 
+                        {{ user_avgs['Putts per Rd']|round(1) }}, 
+                        {{ user_avgs['Avg Drive Dist']|round(1) }}
+                    ], 
+                    backgroundColor: '#1e3a8a', 
+                    borderRadius: 5 
+                },
+                { 
+                    label: 'Target Benchmark', 
+                    data: [
+                        {{ target_stats.get('GIR', 0)|round(1) }}, 
+                        {{ target_stats.get('FIR', 0)|round(1) }}, 
+                        {{ target_stats.get('Up & Down', 0)|round(1) }}, 
+                        {{ target_stats.get('Putts per Rd', 0)|round(1) }}, 
+                        {{ target_stats.get('Avg Drive Dist', 0)|round(1) }}
+                    ], 
+                    backgroundColor: '#cbd5e1', 
+                    borderRadius: 5 
+                }
+            ]
+        },
+        options: sharedOptions
+    });
+
+    let trendChartObj = null;
+    function updateTrendChart() {
+        const ctx = document.getElementById('trendChart').getContext('2d');
+        const key = document.getElementById('trendSelector').value;
+        if(trendChartObj) trendChartObj.destroy();
+        
+        trendChartObj = new Chart(ctx, {
+            data: {
+                labels: trendData.dates,
+                datasets: [
+                    { type: 'line', label: 'Score', data: trendData.scores, borderColor: '#1e3a8a', yAxisID: 'y', tension: 0.3, pointRadius: 4 },
+                    { type: 'line', label: 'Metric', data: trendData[key], borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.1)', fill: true, yAxisID: 'y1', tension: 0.3, pointStyle: 'rect', pointRadius: 5 },
+                    { type: 'line', label: 'Target', data: Array(trendData.dates.length).fill(trendData.benchmarks[key]), borderColor: '#ef4444', borderDash: [5, 5], pointRadius: 0, yAxisID: 'y1' }
+                ]
+            },
+            options: {
+                ...sharedOptions,
+                scales: {
+                    y: { type: 'linear', position: 'left', title: { display: true, text: 'Score' } },
+                    y1: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Metric Value' } }
+                }
+            }
+        });
+    }
+
+    if(trendData.dates.length > 0) {
+        updateTrendChart();
+    }
+</script>
+</body>
+</html>

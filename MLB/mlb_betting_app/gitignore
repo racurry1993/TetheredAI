@@ -1,0 +1,12 @@
+.env
+data/odds.db
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.DS_Store
+# Keep or remove these depending on your repo strategy.
+# data/odds.db
+# data/raw/
+# data/processed/
+# models/

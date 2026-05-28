@@ -218,10 +218,20 @@ def query_props():
 
 	conn = sqlite3.connect(DATABASE_NAME)
 	table_name = 'player_props'
-	prop_df = pd.read_sql(f"""
-					 SELECT * FROM {table_name} WHERE market_type = 'player_pass_tds'
+	#prop_df = pd.read_sql(f"""
+	#				 SELECT * FROM {table_name} WHERE market_type = 'player_pass_tds'
+	#				 --AND lower(event_name) like '%tit%'
+	#				 """, conn)
+	prop_df = pd.read_sql(f"""SELECT T.*
+					FROM
+					(
+					 SELECT T.*
+					 , ROW_NUMBER () OVER (PARTITION BY player_name ORDER BY event_commence_time DESC) as game_rank
+					 FROM {table_name} T WHERE market_type = 'player_pass_tds'
 					 --AND lower(event_name) like '%tit%'
-					 """, conn)
+					) T
+					WHERE T.game_rank = 1
+					""", conn)
 	return prop_df
 	
 def name_match(main_df, props_df):
@@ -311,6 +321,19 @@ def name_match(main_df, props_df):
 
 	# Create the common key column in props_df using the map
 	props_df['passer_player_name'] = props_df['player_name'].map(name_map)
+	# Create the common key column in props_df using the map
+	props_df['passer_player_name'] = props_df['player_name'].map(name_map)
+	from dateutil import parser
+	# Define your timezone mapping
+	tz_mapping = {"EDT": -14400, "EST": -18000} # Offsets in seconds
+	# Apply the parser to each string in the column
+	props_df['event_commence_time'] = props_df['event_commence_time'].apply(
+		lambda x: parser.parse(x, tzinfos=tz_mapping)
+	)
+	props_df['event_commence_time'] = pd.to_datetime(
+		props_df['event_commence_time'], 
+		utc=True
+	)
 	props_df['gameday'] = pd.to_datetime(props_df['event_commence_time']).dt.strftime('%Y-%m-%d')
 	return props_df
 
@@ -319,18 +342,14 @@ def prediction_algorithm(schd_df, main_df):
 	import joblib
 	import numpy as np
 
-	week_num = 17
+	week_num = 22
 	try:
 		model = joblib.load('nfl_pass_td_tuned_model.joblib')
 		print("Model loaded successfully.")
 	except FileNotFoundError:
 		print("Error: The .joblib file was not found. Please check the file path and name.")
 		#exit()
-
-	try:
-		edge_threshold = joblib.load('edge_threshold.joblib')
-	except:
-		edge_threshold = 0.22  # Fallback to the value we found
+	edge_threshold = joblib.load('edge_threshold.joblib')
 
 
 	# Step 3: Prepare the data for prediction.

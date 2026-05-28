@@ -297,6 +297,19 @@ name_map = valid_matches.set_index('prop_name')['final_name_match'].to_dict()
 
 # Create the common key column in prop_df using the map
 prop_df['passer_player_name'] = prop_df['player_name'].map(name_map)
+from dateutil import parser
+
+# Define your timezone mapping
+tz_mapping = {"EDT": -14400, "EST": -18000} # Offsets in seconds
+
+# Apply the parser to each string in the column
+prop_df['event_commence_time'] = prop_df['event_commence_time'].apply(
+    lambda x: parser.parse(x, tzinfos=tz_mapping)
+)
+prop_df['event_commence_time'] = pd.to_datetime(
+    prop_df['event_commence_time'], 
+    utc=True
+)
 prop_df['gameday'] = pd.to_datetime(prop_df['event_commence_time']).dt.strftime('%Y-%m-%d')
 # Merge the DataFrames on the newly created common key
 merged_df = final_df.merge(
@@ -307,7 +320,7 @@ merged_df = final_df.merge(
 
 merged_df.dropna(subset='sport_key', inplace=True)
 
-merged_df.drop(columns=['event_id','event_name','sport_key','event_commence_time','updated_dttm'], axis=1, inplace=True)
+merged_df.drop(columns=['event_id','event_name','sport_key','event_commence_time','updated_dttm'], inplace=True)
 
 # Identify categorical columns to be encoded
 categorical_cols = ['passer_player_name', 'posteam', 'defteam', 'roof', 'surface']

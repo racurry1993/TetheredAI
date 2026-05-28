@@ -10,8 +10,8 @@ os.chdir(r'C:\Users\rfo7799\Desktop\Git\TetheredAI')
 #https://www.espn.com/golf/schedule
 
 #Manual Input Needed for Future Tournament
-tournament_name = '''U.S. Open'''
-tournament_Id = '401703515'
+tournament_name = '''The Genesis Invitational'''
+tournament_Id = '401811933'
 
 class ESPNGolfScraper:
     def __init__(self):
@@ -143,7 +143,7 @@ class ESPNGolfScraper:
 
 scraper = ESPNGolfScraper() 
 #url = 'https://www.espn.com/golf/schedule'
-url = [(2025, 'https://www.espn.com/golf/schedule'), (2024, 'https://www.espn.com/golf/schedule/_/season/2024'), (2023, 'https://www.espn.com/golf/schedule/_/season/2023')]
+url = [(2026, 'https://www.espn.com/golf/schedule'), (2025, 'https://www.espn.com/golf/schedule/_/season/2025'), (2024, 'https://www.espn.com/golf/schedule/_/season/2024'), (2023, 'https://www.espn.com/golf/schedule/_/season/2023')]
 full_tournament_data = pd.DataFrame()
 for web in url:
     tournaments = scraper.scrape_golf_schedule(web[1])

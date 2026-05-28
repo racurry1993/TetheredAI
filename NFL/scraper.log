@@ -815,3 +815,11 @@
 2025-11-23 12:03:39 - INFO - Excel file 'player_props.xlsx' has been created with filters, sorting, and adjusted column widths.
 2025-11-23 12:03:39 - INFO - Processing completed in 0:00:25.136456.
 2025-11-23 12:03:39 - INFO - Quota Used: 44
+2026-02-05 08:01:34 - INFO - Processing started.
+2026-02-05 08:01:41 - INFO - Fetched and filtered 1 events for sport: americanfootball_nfl
+2026-02-05 08:01:42 - INFO - Stored props for event ID: b64e3587d7a4cf01a568e7150a2a1aec
+2026-02-05 08:01:42 - WARNING - Pinnacle data not found for event.
+2026-02-05 08:01:42 - INFO - HTML file with combined bets has been saved as 'index.html'
+2026-02-05 08:01:42 - INFO - Excel file 'player_props.xlsx' has been created with filters, sorting, and adjusted column widths.
+2026-02-05 08:01:42 - INFO - Processing completed in 0:00:08.175223.
+2026-02-05 08:01:42 - INFO - Quota Used: 10
