@@ -1,0 +1,95 @@
+name: Manual MLB Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      markets:
+        description: "Odds markets to fetch"
+        required: true
+        default: "h2h"
+      days_back:
+        description: "Historical days back for MLB games"
+        required: true
+        default: "730"
+      days_forward:
+        description: "Upcoming days forward"
+        required: true
+        default: "14"
+
+  schedule:
+    - cron: "37 13 * * *"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  run-mlb-pipeline:
+    runs-on: ubuntu-latest
+
+    env:
+      ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+      ODDS_DB_PATH: data/odds.db
+      DATA_DIR: data
+      MODEL_DIR: models
+      ODDS_SPORT_KEY: baseball_mlb
+      ODDS_REGIONS: us
+      ODDS_FORMAT: american
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Create folders
+        run: |
+          mkdir -p data/raw data/processed data/predictions models
+
+      - name: Initialize database
+        run: python scripts/00_init_db.py
+
+      - name: Fetch odds
+        run: |
+          python scripts/01_fetch_odds.py \
+            --sport baseball_mlb \
+            --regions us \
+            --markets "${{ github.event.inputs.markets || 'h2h' }}"
+
+      - name: Fetch MLB games
+        run: |
+          python scripts/02_fetch_mlb_games.py \
+            --days-back "${{ github.event.inputs.days_back || '730' }}" \
+            --days-forward "${{ github.event.inputs.days_forward || '14' }}"
+
+      - name: QA smoke test
+        run: python scripts/qa_smoke_test.py
+
+      - name: Build features
+        run: python scripts/03_build_features.py
+
+      - name: Train moneyline model
+        run: python scripts/04_train_moneyline_model.py --tune --calibrate --min-rows 100
+
+      - name: Score upcoming games
+        run: |
+          python scripts/05_score_today.py \
+            --days-forward "${{ github.event.inputs.days_forward || '14' }}"
+
+      - name: Upload outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-pipeline-outputs
+          path: |
+            data/odds.db
+            data/processed/**
+            data/predictions/**
+            models/**
