@@ -16,6 +16,8 @@ LOGGER = logging.getLogger(__name__)
 ROLLING_WINDOWS = (3, 5, 10, 20)
 PITCHER_WINDOWS = (3, 5, 10)
 TEAM_VS_HAND_WINDOWS = (10, 20)
+TEAM_BOX_WINDOWS = (3, 5, 10, 20)
+BULLPEN_WINDOWS = (1, 3, 5, 10)
 
 POSTGAME_COLUMNS = {
     "home_score", "away_score", "target_home_win", "home_margin", "total_runs",
@@ -195,24 +197,42 @@ def build_team_event_frame(games: pd.DataFrame) -> pd.DataFrame:
 
 
 def add_rolling_team_features(team_events: pd.DataFrame, windows: Iterable[int] = ROLLING_WINDOWS) -> pd.DataFrame:
+    """Create leakage-safe rolling team form features.
+
+    Uses an explicit per-team loop instead of groupby.apply so grouping columns
+    are preserved consistently across pandas versions. All rolling stats are
+    shifted by one row, so the current game result is never used to predict
+    itself. Future scheduled rows have NaN outcomes and therefore do not update
+    result-based history, while schedule-derived rest days remain available.
+    """
     if team_events.empty:
         return team_events
+
     team_events = team_events.copy().sort_values(["team_id", "game_datetime_utc", "game_pk"])
     stat_cols = ["win", "runs_for", "runs_against", "run_diff"]
+    outputs = []
 
-    def transform_group(g: pd.DataFrame) -> pd.DataFrame:
+    for team_id, g in team_events.groupby("team_id", group_keys=False, dropna=False, sort=False):
         g = g.sort_values(["game_datetime_utc", "game_pk"]).copy()
+        g["team_id"] = team_id
         g["games_played_to_date"] = g["win"].shift(1).notna().cumsum()
         g["prev_game_datetime_utc"] = g["game_datetime_utc"].shift(1)
-        g["rest_days"] = (g["game_datetime_utc"] - g["prev_game_datetime_utc"]).dt.total_seconds() / 86400.0
+        g["rest_days"] = (
+            g["game_datetime_utc"] - g["prev_game_datetime_utc"]
+        ).dt.total_seconds() / 86400.0
+
+        new_cols = {}
         for col in stat_cols:
             shifted = g[col].shift(1)
-            g[f"{col}_season_to_date"] = shifted.expanding(min_periods=1).mean()
+            new_cols[f"{col}_season_to_date"] = shifted.expanding(min_periods=1).mean()
             for window in windows:
-                g[f"{col}_last{window}"] = shifted.rolling(window=window, min_periods=1).mean()
-        return g
+                new_cols[f"{col}_last{window}"] = shifted.rolling(window=window, min_periods=1).mean()
 
-    return team_events.groupby("team_id", group_keys=False, dropna=False).apply(transform_group).reset_index(drop=True)
+        if new_cols:
+            g = pd.concat([g, pd.DataFrame(new_cols, index=g.index)], axis=1).copy()
+        outputs.append(g)
+
+    return pd.concat(outputs, ignore_index=True) if outputs else team_events
 
 
 def _prefix_columns(df: pd.DataFrame, prefix: str, exclude: set[str]) -> pd.DataFrame:
@@ -327,7 +347,7 @@ def _compute_pitcher_starter_rollups(pitcher_stats: pd.DataFrame) -> pd.DataFram
     return out[keep_cols].sort_values(["pitcher_id", "game_datetime_utc", "game_pk"]).reset_index(drop=True)
 
 
-def _asof_merge_by_key(target: pd.DataFrame, history: pd.DataFrame, key_col: str, date_col: str, feature_cols: list[str]) -> pd.DataFrame:
+def _asof_merge_by_key(target: pd.DataFrame, history: pd.DataFrame, key_col: str, date_col: str, feature_cols: list[str], allow_exact_matches: bool = True) -> pd.DataFrame:
     """As-of merge history features onto target rows within each entity key.
 
     We loop by ``key_col`` before calling ``merge_asof``, so using the
@@ -384,7 +404,7 @@ def _asof_merge_by_key(target: pd.DataFrame, history: pd.DataFrame, key_col: str
             left_on=date_col,
             right_on="history_game_datetime_utc",
             direction="backward",
-            allow_exact_matches=True,
+            allow_exact_matches=allow_exact_matches,
         )
 
         for col in feature_cols:
@@ -396,6 +416,297 @@ def _asof_merge_by_key(target: pd.DataFrame, history: pd.DataFrame, key_col: str
         rows.append(merged)
 
     return pd.concat(rows, ignore_index=True) if rows else target
+
+
+
+
+def build_elo_feature_frame(
+    games: pd.DataFrame,
+    base_rating: float = 1500.0,
+    k_factor: float = 20.0,
+    home_advantage: float = 35.0,
+) -> pd.DataFrame:
+    """Build leakage-safe pregame Elo features.
+
+    Ratings are recorded before each game and only updated after completed games.
+    Future games therefore receive ratings based on all known completed games.
+    """
+    if games is None or games.empty:
+        return pd.DataFrame()
+
+    required = {"game_pk", "game_datetime_utc", "home_team_id", "away_team_id"}
+    if not required.issubset(games.columns):
+        LOGGER.warning("Skipping Elo features because games are missing columns: %s", sorted(required - set(games.columns)))
+        return pd.DataFrame()
+
+    df = games.copy().sort_values(["game_datetime_utc", "game_pk"])
+    df["game_datetime_utc"] = pd.to_datetime(df["game_datetime_utc"], utc=True, errors="coerce")
+    ratings: dict[float, float] = {}
+    rows = []
+
+    for _, g in df.iterrows():
+        game_pk = g.get("game_pk")
+        home_id = pd.to_numeric(pd.Series([g.get("home_team_id")]), errors="coerce").iloc[0]
+        away_id = pd.to_numeric(pd.Series([g.get("away_team_id")]), errors="coerce").iloc[0]
+        if pd.isna(home_id) or pd.isna(away_id):
+            continue
+        home_id = float(home_id)
+        away_id = float(away_id)
+        home_rating = ratings.get(home_id, base_rating)
+        away_rating = ratings.get(away_id, base_rating)
+        elo_home_prob = 1.0 / (1.0 + 10.0 ** ((away_rating - (home_rating + home_advantage)) / 400.0))
+        rows.append({
+            "game_pk": game_pk,
+            "home_elo_pre": home_rating,
+            "away_elo_pre": away_rating,
+            "diff_elo_pre": home_rating - away_rating,
+            "elo_home_win_prob": elo_home_prob,
+        })
+
+        # Update only after completed games. This prevents future rows from changing ratings.
+        if pd.notna(g.get("target_home_win")):
+            actual_home = float(g.get("target_home_win"))
+            ratings[home_id] = home_rating + k_factor * (actual_home - elo_home_prob)
+            ratings[away_id] = away_rating + k_factor * ((1.0 - actual_home) - (1.0 - elo_home_prob))
+
+    return pd.DataFrame(rows)
+
+
+def _compute_team_boxscore_rollups(team_stats: Optional[pd.DataFrame]) -> pd.DataFrame:
+    """Build team offense/boxscore form features from completed team-game boxscores.
+
+    These rollups are *postgame as-of* rows, merged back with allow_exact_matches=False
+    so a training row never sees its own game. Future games see the latest completed
+    game, which avoids the one-game-stale issue of shifted exact-game features.
+    """
+    if team_stats is None or team_stats.empty:
+        return pd.DataFrame()
+
+    required = {"game_pk", "game_datetime_utc", "team_id"}
+    if not required.issubset(team_stats.columns):
+        LOGGER.warning("Skipping team boxscore features because columns are missing: %s", sorted(required - set(team_stats.columns)))
+        return pd.DataFrame()
+
+    df = team_stats.copy()
+    df["game_datetime_utc"] = pd.to_datetime(df["game_datetime_utc"], utc=True, errors="coerce")
+    df["team_id"] = pd.to_numeric(df["team_id"], errors="coerce")
+
+    raw_cols = [
+        "at_bats", "runs", "hits", "doubles", "triples", "home_runs", "walks",
+        "strikeouts", "left_on_base", "stolen_bases", "caught_stealing", "avg", "obp", "slg", "ops",
+    ]
+    for col in raw_cols:
+        if col not in df.columns:
+            df[col] = np.nan
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    df["team_box_xbh"] = df["doubles"] + df["triples"] + df["home_runs"]
+    df["team_box_bb_per_ab"] = _safe_div(df["walks"], df["at_bats"])
+    df["team_box_k_per_ab"] = _safe_div(df["strikeouts"], df["at_bats"])
+    df["team_box_hr_per_ab"] = _safe_div(df["home_runs"], df["at_bats"])
+    df["team_box_xbh_per_hit"] = _safe_div(df["team_box_xbh"], df["hits"])
+    df["team_box_sb_attempts"] = df["stolen_bases"] + df["caught_stealing"]
+    df["team_box_sb_success_rate"] = _safe_div(df["stolen_bases"], df["team_box_sb_attempts"])
+    df["team_box_lob_per_run"] = _safe_div(df["left_on_base"], df["runs"].replace({0: np.nan}))
+
+    stat_cols = [
+        "runs", "hits", "home_runs", "walks", "strikeouts", "left_on_base", "avg", "obp", "slg", "ops",
+        "team_box_xbh", "team_box_bb_per_ab", "team_box_k_per_ab", "team_box_hr_per_ab",
+        "team_box_xbh_per_hit", "team_box_sb_attempts", "team_box_sb_success_rate", "team_box_lob_per_run",
+    ]
+
+    outputs = []
+    for team_id, g in df.dropna(subset=["team_id", "game_datetime_utc"]).groupby("team_id", sort=False, dropna=False):
+        g = g.sort_values(["game_datetime_utc", "game_pk"]).copy()
+        g["team_id"] = team_id
+        g["team_box_games_to_date"] = np.arange(1, len(g) + 1, dtype=float)
+        new_cols = {}
+        for col in stat_cols:
+            if col not in g.columns:
+                continue
+            source = g[col]
+            clean_name = col.replace("team_box_", "")
+            new_cols[f"team_box_{clean_name}_season_to_date"] = source.expanding(min_periods=1).mean()
+            for w in TEAM_BOX_WINDOWS:
+                new_cols[f"team_box_{clean_name}_last{w}"] = source.rolling(window=w, min_periods=1).mean()
+        g = pd.concat([g, pd.DataFrame(new_cols, index=g.index)], axis=1).copy()
+        outputs.append(g)
+
+    if not outputs:
+        return pd.DataFrame()
+    out = pd.concat(outputs, ignore_index=True)
+    keep = ["game_pk", "game_datetime_utc", "team_id", "team_box_games_to_date"]
+    keep += [c for c in out.columns if c.startswith("team_box_") and c not in keep]
+    keep = [c for c in keep if c in out.columns]
+    return out[keep].sort_values(["team_id", "game_datetime_utc", "game_pk"]).reset_index(drop=True)
+
+
+def build_team_boxscore_feature_frame(games: pd.DataFrame, team_stats: Optional[pd.DataFrame]) -> pd.DataFrame:
+    if games is None or games.empty or team_stats is None or team_stats.empty:
+        return pd.DataFrame()
+    roll = _compute_team_boxscore_rollups(team_stats)
+    if roll.empty:
+        return pd.DataFrame()
+
+    games = games.copy()
+    games["game_datetime_utc"] = pd.to_datetime(games["game_datetime_utc"], utc=True, errors="coerce")
+    feature_cols = [c for c in roll.columns if c not in {"game_pk", "game_datetime_utc", "team_id"}]
+
+    outputs = []
+    for side in ("home", "away"):
+        team_col = f"{side}_team_id"
+        if team_col not in games.columns:
+            continue
+        target = games[["game_pk", "game_datetime_utc", team_col]].rename(columns={team_col: "team_id"})
+        target["team_id"] = pd.to_numeric(target["team_id"], errors="coerce")
+        merged = _asof_merge_by_key(
+            target,
+            roll,
+            "team_id",
+            "game_datetime_utc",
+            feature_cols,
+            allow_exact_matches=False,
+        )
+        merged = merged.drop(columns=["team_id", "game_datetime_utc", "history_game_datetime_utc"], errors="ignore")
+        merged = _prefix_columns(merged, f"{side}_", exclude={"game_pk"})
+        outputs.append(merged)
+
+    if not outputs:
+        return pd.DataFrame()
+    out = outputs[0]
+    for extra in outputs[1:]:
+        out = out.merge(extra, on="game_pk", how="outer")
+
+    diff_data = {}
+    for col in list(out.columns):
+        if not col.startswith("home_team_box_"):
+            continue
+        away_col = col.replace("home_", "away_", 1)
+        if away_col in out.columns and pd.api.types.is_numeric_dtype(out[col]) and pd.api.types.is_numeric_dtype(out[away_col]):
+            diff_data[f"diff_{col.replace('home_', '', 1)}"] = out[col] - out[away_col]
+    if diff_data:
+        out = pd.concat([out, pd.DataFrame(diff_data, index=out.index)], axis=1).copy()
+    return out
+
+
+def _compute_bullpen_rollups(pitcher_stats: Optional[pd.DataFrame]) -> pd.DataFrame:
+    """Build leakage-safe bullpen workload and performance features.
+
+    Reliever totals are aggregated to team-game level. Rollups include current
+    completed game in the history row, then target-game merge uses
+    allow_exact_matches=False so training rows only see prior games.
+    """
+    if pitcher_stats is None or pitcher_stats.empty:
+        return pd.DataFrame()
+    required = {"game_pk", "team_id", "game_datetime_utc", "is_starter"}
+    if not required.issubset(pitcher_stats.columns):
+        LOGGER.warning("Skipping bullpen features because pitcher stats are missing columns: %s", sorted(required - set(pitcher_stats.columns)))
+        return pd.DataFrame()
+
+    df = pitcher_stats.copy()
+    df["game_datetime_utc"] = pd.to_datetime(df["game_datetime_utc"], utc=True, errors="coerce")
+    df["team_id"] = pd.to_numeric(df["team_id"], errors="coerce")
+    df["is_starter"] = pd.to_numeric(df["is_starter"], errors="coerce")
+    df = df[(df["is_starter"] != 1) & df["team_id"].notna() & df["game_datetime_utc"].notna()].copy()
+    if df.empty:
+        return pd.DataFrame()
+
+    stat_cols = ["outs_pitched", "runs", "earned_runs", "hits", "walks", "strikeouts", "home_runs", "pitches_thrown", "batters_faced"]
+    for col in stat_cols:
+        if col not in df.columns:
+            df[col] = np.nan
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    agg = (
+        df.groupby(["game_pk", "team_id", "game_datetime_utc"], as_index=False)[stat_cols]
+        .sum(min_count=1)
+        .sort_values(["team_id", "game_datetime_utc", "game_pk"])
+    )
+    agg["bullpen_relief_ip"] = agg["outs_pitched"] / 3.0
+    agg["bullpen_era_game"] = _safe_div(agg["earned_runs"] * 27.0, agg["outs_pitched"])
+    agg["bullpen_whip_game"] = _safe_div(agg["hits"] + agg["walks"], agg["bullpen_relief_ip"])
+    agg["bullpen_k_per_9_game"] = _safe_div(agg["strikeouts"] * 27.0, agg["outs_pitched"])
+    agg["bullpen_bb_per_9_game"] = _safe_div(agg["walks"] * 27.0, agg["outs_pitched"])
+    agg["bullpen_hr_per_9_game"] = _safe_div(agg["home_runs"] * 27.0, agg["outs_pitched"])
+    agg["bullpen_k_minus_bb_per_bf_game"] = _safe_div(agg["strikeouts"] - agg["walks"], agg["batters_faced"])
+
+    perf_base_cols = ["outs_pitched", "earned_runs", "hits", "walks", "strikeouts", "home_runs", "pitches_thrown", "batters_faced", "bullpen_relief_ip"]
+    outputs = []
+    for team_id, g in agg.groupby("team_id", sort=False, dropna=False):
+        g = g.sort_values(["game_datetime_utc", "game_pk"]).copy()
+        g["team_id"] = team_id
+        g["bullpen_games_to_date"] = np.arange(1, len(g) + 1, dtype=float)
+        new_cols = {}
+        for w in BULLPEN_WINDOWS:
+            sums = g[perf_base_cols].rolling(window=w, min_periods=1).sum()
+            outs = sums["outs_pitched"]
+            innings = outs / 3.0
+            new_cols[f"bullpen_ip_last{w}"] = sums["bullpen_relief_ip"]
+            new_cols[f"bullpen_pitches_last{w}"] = sums["pitches_thrown"]
+            new_cols[f"bullpen_batters_faced_last{w}"] = sums["batters_faced"]
+            new_cols[f"bullpen_era_last{w}"] = _safe_div(sums["earned_runs"] * 27.0, outs)
+            new_cols[f"bullpen_whip_last{w}"] = _safe_div(sums["hits"] + sums["walks"], innings)
+            new_cols[f"bullpen_k_per_9_last{w}"] = _safe_div(sums["strikeouts"] * 27.0, outs)
+            new_cols[f"bullpen_bb_per_9_last{w}"] = _safe_div(sums["walks"] * 27.0, outs)
+            new_cols[f"bullpen_hr_per_9_last{w}"] = _safe_div(sums["home_runs"] * 27.0, outs)
+            new_cols[f"bullpen_k_minus_bb_per_bf_last{w}"] = _safe_div(sums["strikeouts"] - sums["walks"], sums["batters_faced"])
+        g = pd.concat([g, pd.DataFrame(new_cols, index=g.index)], axis=1).copy()
+        outputs.append(g)
+
+    if not outputs:
+        return pd.DataFrame()
+    out = pd.concat(outputs, ignore_index=True)
+    keep = ["game_pk", "game_datetime_utc", "team_id", "bullpen_games_to_date"]
+    keep += [c for c in out.columns if c.startswith("bullpen_") and c not in keep]
+    keep = [c for c in keep if c in out.columns]
+    return out[keep].sort_values(["team_id", "game_datetime_utc", "game_pk"]).reset_index(drop=True)
+
+
+def build_bullpen_feature_frame(games: pd.DataFrame, pitcher_stats: Optional[pd.DataFrame]) -> pd.DataFrame:
+    if games is None or games.empty or pitcher_stats is None or pitcher_stats.empty:
+        return pd.DataFrame()
+    roll = _compute_bullpen_rollups(pitcher_stats)
+    if roll.empty:
+        return pd.DataFrame()
+
+    games = games.copy()
+    games["game_datetime_utc"] = pd.to_datetime(games["game_datetime_utc"], utc=True, errors="coerce")
+    feature_cols = [c for c in roll.columns if c not in {"game_pk", "game_datetime_utc", "team_id"}]
+    outputs = []
+    for side in ("home", "away"):
+        team_col = f"{side}_team_id"
+        if team_col not in games.columns:
+            continue
+        target = games[["game_pk", "game_datetime_utc", team_col]].rename(columns={team_col: "team_id"})
+        target["team_id"] = pd.to_numeric(target["team_id"], errors="coerce")
+        merged = _asof_merge_by_key(
+            target,
+            roll,
+            "team_id",
+            "game_datetime_utc",
+            feature_cols,
+            allow_exact_matches=False,
+        )
+        merged = merged.drop(columns=["team_id", "game_datetime_utc", "history_game_datetime_utc"], errors="ignore")
+        merged = _prefix_columns(merged, f"{side}_", exclude={"game_pk"})
+        outputs.append(merged)
+
+    if not outputs:
+        return pd.DataFrame()
+    out = outputs[0]
+    for extra in outputs[1:]:
+        out = out.merge(extra, on="game_pk", how="outer")
+
+    diff_data = {}
+    for col in list(out.columns):
+        if not col.startswith("home_bullpen_"):
+            continue
+        away_col = col.replace("home_", "away_", 1)
+        if away_col in out.columns and pd.api.types.is_numeric_dtype(out[col]) and pd.api.types.is_numeric_dtype(out[away_col]):
+            diff_data[f"diff_{col.replace('home_', '', 1)}"] = out[col] - out[away_col]
+    if diff_data:
+        out = pd.concat([out, pd.DataFrame(diff_data, index=out.index)], axis=1).copy()
+    return out
 
 
 def build_starter_feature_frame(games: pd.DataFrame, pitcher_stats: Optional[pd.DataFrame]) -> pd.DataFrame:
@@ -681,6 +992,18 @@ def build_game_feature_frame(
     frame = games[base_cols].merge(home, on=["game_pk", "season", "official_date", "game_datetime_utc"], how="left")
     frame = frame.merge(away, on=["game_pk", "season", "official_date", "game_datetime_utc"], how="left")
 
+    elo_features = build_elo_feature_frame(games)
+    if not elo_features.empty:
+        frame = frame.merge(elo_features, on="game_pk", how="left")
+
+    team_box_features = build_team_boxscore_feature_frame(games, team_game_stats)
+    if not team_box_features.empty:
+        frame = frame.merge(team_box_features, on="game_pk", how="left")
+
+    bullpen_features = build_bullpen_feature_frame(games, pitcher_stats)
+    if not bullpen_features.empty:
+        frame = frame.merge(bullpen_features, on="game_pk", how="left")
+
     for stat in ["win", "runs_for", "runs_against", "run_diff"]:
         for suffix in ["season_to_date", "last3", "last5", "last10", "last20"]:
             h = f"home_{stat}_{suffix}"
@@ -730,7 +1053,7 @@ def get_model_feature_columns(
 ) -> list[str]:
     blocked = set(POSTGAME_COLUMNS) | {
         "game_pk", "season", "game_type", "official_date", "game_datetime_utc",
-        "venue_name", "home_team_name", "home_team_norm", "away_team_name", "away_team_norm",
+        "venue_id", "venue_name", "home_team_name", "home_team_norm", "away_team_name", "away_team_norm",
         "home_team_id", "away_team_id", "home_team", "away_team",
         "probable_home_pitcher_name", "probable_away_pitcher_name",
         "probable_home_pitcher_id", "probable_away_pitcher_id",
