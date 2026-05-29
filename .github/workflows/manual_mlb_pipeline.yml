@@ -104,6 +104,13 @@ jobs:
             --game-type R \
             --chunk-days 30
 
+      - name: Fetch MLB boxscores and player stats
+        run: |
+          cd "$APP_DIR"
+          python scripts/07_fetch_mlb_boxscores.py \
+            --days-back "${{ inputs.days_back }}" \
+            --sleep 0.10
+
       - name: QA smoke test
         run: |
           cd "$APP_DIR"
