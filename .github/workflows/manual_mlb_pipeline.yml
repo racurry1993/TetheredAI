@@ -116,6 +116,11 @@ jobs:
           cd "$APP_DIR"
           python scripts/qa_smoke_test.py
 
+      - name: Validate feature engineering
+        run: |
+          cd "$APP_DIR"
+          python scripts/validate_feature_engineering.py
+    
       - name: Build features
         run: |
           cd "$APP_DIR"
