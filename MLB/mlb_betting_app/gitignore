@@ -1,9 +1,9 @@
 .env
-data/odds.db
 .venv/
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
+data/raw/
 .DS_Store
 # Keep or remove these depending on your repo strategy.
 # data/odds.db

@@ -13,6 +13,8 @@ from mlb_betting.feature_engineering import (
     build_game_feature_frame,
     load_latest_odds_consensus,
     load_mlb_games,
+    load_mlb_pitcher_game_stats,
+    load_mlb_team_game_stats,
     save_features,
 )
 from mlb_betting.logging_utils import configure_logging
@@ -34,9 +36,25 @@ def main() -> None:
     with connect(settings.odds_db_path) as conn:
         games = load_mlb_games(conn)
         odds = load_latest_odds_consensus(conn)
-    features = build_game_feature_frame(games, odds_consensus=odds, include_future=not args.completed_only)
+        pitcher_stats = load_mlb_pitcher_game_stats(conn)
+        team_game_stats = load_mlb_team_game_stats(conn)
+
+    features = build_game_feature_frame(
+        games,
+        odds_consensus=odds,
+        include_future=not args.completed_only,
+        pitcher_stats=pitcher_stats,
+        team_game_stats=team_game_stats,
+    )
     save_features(features, output)
-    print({"rows": len(features), "columns": len(features.columns), "output": str(output)})
+    print({
+        "rows": len(features),
+        "columns": len(features.columns),
+        "games_rows": len(games),
+        "pitcher_game_stat_rows": len(pitcher_stats),
+        "team_game_stat_rows": len(team_game_stats),
+        "output": str(output),
+    })
 
 
 if __name__ == "__main__":

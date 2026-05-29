@@ -14,11 +14,27 @@ from .team_mapping import normalize_team_name
 LOGGER = logging.getLogger(__name__)
 
 ROLLING_WINDOWS = (3, 5, 10, 20)
+PITCHER_WINDOWS = (3, 5, 10)
+TEAM_VS_HAND_WINDOWS = (10, 20)
 
 POSTGAME_COLUMNS = {
     "home_score", "away_score", "target_home_win", "home_margin", "total_runs",
     "detailed_state", "abstract_state", "status_code",
 }
+
+MARKET_KEYWORDS = (
+    "market_",
+    "moneyline",
+    "spread",
+    "total_points",
+    "over_price",
+    "under_price",
+    "book_count",
+    "vig",
+    "odds_",
+    "event_id",
+    "event_date",
+)
 
 
 def load_mlb_games(conn) -> pd.DataFrame:
@@ -28,6 +44,30 @@ def load_mlb_games(conn) -> pd.DataFrame:
     df["game_datetime_utc"] = pd.to_datetime(df["game_datetime_utc"], utc=True, errors="coerce")
     df["official_date"] = pd.to_datetime(df["official_date"], errors="coerce").dt.date.astype(str)
     return df.sort_values(["game_datetime_utc", "game_pk"]).reset_index(drop=True)
+
+
+def load_mlb_pitcher_game_stats(conn) -> pd.DataFrame:
+    try:
+        df = read_sql(conn, "SELECT * FROM mlb_pitcher_game_stats")
+    except Exception:
+        return pd.DataFrame()
+    if df.empty:
+        return df
+    df["game_datetime_utc"] = pd.to_datetime(df["game_datetime_utc"], utc=True, errors="coerce")
+    df["official_date"] = pd.to_datetime(df["official_date"], errors="coerce").dt.date.astype(str)
+    return df.sort_values(["pitcher_id", "game_datetime_utc", "game_pk"]).reset_index(drop=True)
+
+
+def load_mlb_team_game_stats(conn) -> pd.DataFrame:
+    try:
+        df = read_sql(conn, "SELECT * FROM mlb_team_game_stats")
+    except Exception:
+        return pd.DataFrame()
+    if df.empty:
+        return df
+    df["game_datetime_utc"] = pd.to_datetime(df["game_datetime_utc"], utc=True, errors="coerce")
+    df["official_date"] = pd.to_datetime(df["official_date"], errors="coerce").dt.date.astype(str)
+    return df.sort_values(["team_id", "game_datetime_utc", "game_pk"]).reset_index(drop=True)
 
 
 def _latest_snapshot_by_outcome(odds: pd.DataFrame) -> pd.DataFrame:
@@ -106,8 +146,7 @@ def load_latest_odds_consensus(conn) -> pd.DataFrame:
 
     if not rows:
         return pd.DataFrame()
-    out = pd.DataFrame(rows)
-    return out
+    return pd.DataFrame(rows)
 
 
 def build_team_event_frame(games: pd.DataFrame) -> pd.DataFrame:
@@ -168,8 +207,7 @@ def add_rolling_team_features(team_events: pd.DataFrame, windows: Iterable[int] 
         g["rest_days"] = (g["game_datetime_utc"] - g["prev_game_datetime_utc"]).dt.total_seconds() / 86400.0
         for col in stat_cols:
             shifted = g[col].shift(1)
-            expanding = shifted.expanding(min_periods=1).mean()
-            g[f"{col}_season_to_date"] = expanding
+            g[f"{col}_season_to_date"] = shifted.expanding(min_periods=1).mean()
             for window in windows:
                 g[f"{col}_last{window}"] = shifted.rolling(window=window, min_periods=1).mean()
         return g
@@ -182,10 +220,275 @@ def _prefix_columns(df: pd.DataFrame, prefix: str, exclude: set[str]) -> pd.Data
     return df.rename(columns=rename)
 
 
+def _safe_div(num: pd.Series, den: pd.Series) -> pd.Series:
+    den = den.replace({0: np.nan})
+    return num / den
+
+
+def _compute_pitcher_starter_rollups(pitcher_stats: pd.DataFrame) -> pd.DataFrame:
+    if pitcher_stats is None or pitcher_stats.empty:
+        return pd.DataFrame()
+    df = pitcher_stats.copy()
+    df = df[(pd.to_numeric(df.get("is_starter", 0), errors="coerce") == 1)].copy()
+    if df.empty:
+        return pd.DataFrame()
+
+    df["game_datetime_utc"] = pd.to_datetime(df["game_datetime_utc"], utc=True, errors="coerce")
+    for col in ["pitcher_id", "outs_pitched", "earned_runs", "hits", "walks", "strikeouts", "home_runs", "batters_faced", "pitches_thrown"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    df = df.dropna(subset=["pitcher_id", "game_datetime_utc"]).sort_values(["pitcher_id", "game_datetime_utc", "game_pk"])
+
+    stat_cols = ["outs_pitched", "earned_runs", "hits", "walks", "strikeouts", "home_runs", "batters_faced", "pitches_thrown"]
+
+    def transform(g: pd.DataFrame) -> pd.DataFrame:
+        g = g.sort_values(["game_datetime_utc", "game_pk"]).copy()
+        g["pitcher_hand"] = g["pitcher_hand"].ffill().bfill()
+        shifted = g[stat_cols].shift(1)
+        shifted_start = pd.Series(1.0, index=g.index).shift(1)
+        g["starter_games_to_date"] = shifted_start.expanding(min_periods=1).sum()
+        g["starter_days_since_last_start"] = (g["game_datetime_utc"] - g["game_datetime_utc"].shift(1)).dt.total_seconds() / 86400.0
+
+        windows: list[tuple[str, Optional[int]]] = [("season_to_date", None)] + [(f"last{w}", w) for w in PITCHER_WINDOWS]
+        for suffix, window in windows:
+            if window is None:
+                sums = shifted.expanding(min_periods=1).sum()
+                starts = shifted_start.expanding(min_periods=1).sum()
+            else:
+                sums = shifted.rolling(window=window, min_periods=1).sum()
+                starts = shifted_start.rolling(window=window, min_periods=1).sum()
+
+            outs = sums["outs_pitched"]
+            innings = outs / 3.0
+            g[f"starter_era_{suffix}"] = _safe_div(sums["earned_runs"] * 27.0, outs)
+            g[f"starter_whip_{suffix}"] = _safe_div(sums["hits"] + sums["walks"], innings)
+            g[f"starter_k_per_9_{suffix}"] = _safe_div(sums["strikeouts"] * 27.0, outs)
+            g[f"starter_bb_per_9_{suffix}"] = _safe_div(sums["walks"] * 27.0, outs)
+            g[f"starter_hr_per_9_{suffix}"] = _safe_div(sums["home_runs"] * 27.0, outs)
+            g[f"starter_k_minus_bb_per_bf_{suffix}"] = _safe_div(sums["strikeouts"] - sums["walks"], sums["batters_faced"])
+            g[f"starter_ip_per_start_{suffix}"] = _safe_div(innings, starts)
+            g[f"starter_pitches_per_start_{suffix}"] = _safe_div(sums["pitches_thrown"], starts)
+        return g
+
+    out = df.groupby("pitcher_id", group_keys=False, dropna=False).apply(transform).reset_index(drop=True)
+    keep_cols = [
+        "game_pk", "game_datetime_utc", "pitcher_id", "pitcher_name", "pitcher_hand",
+        "starter_games_to_date", "starter_days_since_last_start",
+    ]
+    keep_cols += [c for c in out.columns if c.startswith("starter_") and c not in keep_cols]
+    return out[keep_cols].sort_values(["pitcher_id", "game_datetime_utc", "game_pk"]).reset_index(drop=True)
+
+
+def _asof_merge_by_key(target: pd.DataFrame, history: pd.DataFrame, key_col: str, date_col: str, feature_cols: list[str]) -> pd.DataFrame:
+    rows = []
+    empty_cols = feature_cols + ["history_game_datetime_utc"]
+    for key, tg in target.groupby(key_col, dropna=False):
+        tg = tg.sort_values(date_col).copy()
+        if pd.isna(key):
+            for col in empty_cols:
+                tg[col] = np.nan
+            rows.append(tg)
+            continue
+        hist = history[history[key_col] == key].sort_values(date_col).copy()
+        if hist.empty:
+            for col in empty_cols:
+                tg[col] = np.nan
+            rows.append(tg)
+            continue
+        hist = hist[[key_col, date_col] + feature_cols].rename(columns={date_col: "history_game_datetime_utc"})
+        merged = pd.merge_asof(
+            tg.sort_values(date_col),
+            hist.sort_values("history_game_datetime_utc"),
+            left_on=date_col,
+            right_on="history_game_datetime_utc",
+            by=key_col,
+            direction="backward",
+            allow_exact_matches=True,
+        )
+        rows.append(merged)
+    return pd.concat(rows, ignore_index=True) if rows else target
+
+
+def build_starter_feature_frame(games: pd.DataFrame, pitcher_stats: Optional[pd.DataFrame]) -> pd.DataFrame:
+    if pitcher_stats is None or pitcher_stats.empty:
+        return pd.DataFrame()
+    roll = _compute_pitcher_starter_rollups(pitcher_stats)
+    if roll.empty:
+        return pd.DataFrame()
+    games = games.copy()
+    games["game_datetime_utc"] = pd.to_datetime(games["game_datetime_utc"], utc=True, errors="coerce")
+    feature_cols = [c for c in roll.columns if c not in {"game_pk", "game_datetime_utc", "pitcher_id"}]
+    outputs = []
+    for side in ("home", "away"):
+        pitcher_col = f"probable_{side}_pitcher_id"
+        if pitcher_col not in games.columns:
+            continue
+        target = games[["game_pk", "game_datetime_utc", pitcher_col]].rename(columns={pitcher_col: "pitcher_id"})
+        target["pitcher_id"] = pd.to_numeric(target["pitcher_id"], errors="coerce")
+        merged = _asof_merge_by_key(target, roll.rename(columns={"pitcher_id": "pitcher_id"}), "pitcher_id", "game_datetime_utc", feature_cols)
+        merged = merged.drop(columns=["pitcher_id", "game_datetime_utc", "history_game_datetime_utc"], errors="ignore")
+        merged = _prefix_columns(merged, f"{side}_", exclude={"game_pk"})
+        merged = merged.rename(columns={
+            f"{side}_pitcher_name": f"{side}_starter_pitcher_name",
+            f"{side}_pitcher_hand": f"{side}_starter_pitcher_hand",
+        })
+        outputs.append(merged)
+    if not outputs:
+        return pd.DataFrame()
+    out = outputs[0]
+    for extra in outputs[1:]:
+        out = out.merge(extra, on="game_pk", how="outer")
+
+    # Starter matchup differentials. Lower ERA/WHIP/BB/HR is better, but keep raw home-away diffs for transparency.
+    for col in list(out.columns):
+        if not col.startswith("home_starter_"):
+            continue
+        away_col = col.replace("home_", "away_", 1)
+        if away_col in out.columns and pd.api.types.is_numeric_dtype(out[col]) and pd.api.types.is_numeric_dtype(out[away_col]):
+            out[f"diff_{col.replace('home_', '', 1)}"] = out[col] - out[away_col]
+    return out
+
+
+def _get_actual_starter_hands(pitcher_stats: pd.DataFrame) -> pd.DataFrame:
+    if pitcher_stats is None or pitcher_stats.empty:
+        return pd.DataFrame()
+    st = pitcher_stats[pd.to_numeric(pitcher_stats.get("is_starter", 0), errors="coerce") == 1].copy()
+    if st.empty:
+        return pd.DataFrame()
+    st = st[["game_pk", "is_home", "pitcher_id", "pitcher_hand"]].copy()
+    home = st[st["is_home"] == 1][["game_pk", "pitcher_hand"]].rename(columns={"pitcher_hand": "home_actual_starter_hand"})
+    away = st[st["is_home"] == 0][["game_pk", "pitcher_hand"]].rename(columns={"pitcher_hand": "away_actual_starter_hand"})
+    return home.merge(away, on="game_pk", how="outer")
+
+
+def _compute_team_vs_hand_rollups(team_stats: pd.DataFrame, games: pd.DataFrame, pitcher_stats: pd.DataFrame) -> pd.DataFrame:
+    if team_stats is None or team_stats.empty or pitcher_stats is None or pitcher_stats.empty:
+        return pd.DataFrame()
+    hands = _get_actual_starter_hands(pitcher_stats)
+    if hands.empty:
+        return pd.DataFrame()
+    ts = team_stats.copy()
+    ts["game_datetime_utc"] = pd.to_datetime(ts["game_datetime_utc"], utc=True, errors="coerce")
+    ts = ts.merge(hands, on="game_pk", how="left")
+    ts["opp_starter_hand"] = np.where(ts["is_home"] == 1, ts["away_actual_starter_hand"], ts["home_actual_starter_hand"])
+    ts = ts[ts["opp_starter_hand"].isin(["L", "R"])].copy()
+    if ts.empty:
+        return pd.DataFrame()
+    for col in ["runs", "hits", "home_runs", "walks", "strikeouts", "at_bats", "ops", "obp", "slg"]:
+        if col in ts.columns:
+            ts[col] = pd.to_numeric(ts[col], errors="coerce")
+    ts["bb_per_ab"] = _safe_div(ts["walks"], ts["at_bats"])
+    ts["k_per_ab"] = _safe_div(ts["strikeouts"], ts["at_bats"])
+    stat_cols = ["runs", "home_runs", "bb_per_ab", "k_per_ab", "ops", "obp", "slg"]
+
+    def transform(g: pd.DataFrame) -> pd.DataFrame:
+        g = g.sort_values(["game_datetime_utc", "game_pk"]).copy()
+        g["team_vs_hand_games_to_date"] = pd.Series(1.0, index=g.index).shift(1).expanding(min_periods=1).sum()
+        for col in stat_cols:
+            shifted = g[col].shift(1)
+            g[f"team_vs_hand_{col}_season_to_date"] = shifted.expanding(min_periods=1).mean()
+            for window in TEAM_VS_HAND_WINDOWS:
+                g[f"team_vs_hand_{col}_last{window}"] = shifted.rolling(window=window, min_periods=1).mean()
+        return g
+
+    out = ts.groupby(["team_id", "opp_starter_hand"], group_keys=False, dropna=False).apply(transform).reset_index(drop=True)
+    keep = ["game_pk", "game_datetime_utc", "team_id", "opp_starter_hand", "team_vs_hand_games_to_date"]
+    keep += [c for c in out.columns if c.startswith("team_vs_hand_") and c not in keep]
+    return out[keep].sort_values(["team_id", "opp_starter_hand", "game_datetime_utc", "game_pk"]).reset_index(drop=True)
+
+
+def build_team_vs_hand_feature_frame(
+    games: pd.DataFrame,
+    team_stats: Optional[pd.DataFrame],
+    pitcher_stats: Optional[pd.DataFrame],
+    starter_features: Optional[pd.DataFrame] = None,
+) -> pd.DataFrame:
+    if team_stats is None or team_stats.empty or pitcher_stats is None or pitcher_stats.empty:
+        return pd.DataFrame()
+    roll = _compute_team_vs_hand_rollups(team_stats, games, pitcher_stats)
+    if roll.empty:
+        return pd.DataFrame()
+
+    games = games.copy()
+    games["game_datetime_utc"] = pd.to_datetime(games["game_datetime_utc"], utc=True, errors="coerce")
+    target = games[["game_pk", "game_datetime_utc", "home_team_id", "away_team_id"]].copy()
+
+    if starter_features is not None and not starter_features.empty:
+        hand_cols = [c for c in ["game_pk", "home_starter_pitcher_hand", "away_starter_pitcher_hand"] if c in starter_features.columns]
+        if len(hand_cols) > 1:
+            target = target.merge(starter_features[hand_cols], on="game_pk", how="left")
+
+    # Fall back to actual starter hands for completed games.
+    actual_hands = _get_actual_starter_hands(pitcher_stats)
+    if not actual_hands.empty:
+        target = target.merge(actual_hands, on="game_pk", how="left")
+    target["home_opp_starter_hand"] = target.get("away_starter_pitcher_hand")
+    target["away_opp_starter_hand"] = target.get("home_starter_pitcher_hand")
+    if "away_actual_starter_hand" in target.columns:
+        target["home_opp_starter_hand"] = target["home_opp_starter_hand"].fillna(target["away_actual_starter_hand"])
+    if "home_actual_starter_hand" in target.columns:
+        target["away_opp_starter_hand"] = target["away_opp_starter_hand"].fillna(target["home_actual_starter_hand"])
+
+    feature_cols = [c for c in roll.columns if c not in {"game_pk", "game_datetime_utc", "team_id", "opp_starter_hand"}]
+    outputs = []
+    for side in ("home", "away"):
+        team_col = f"{side}_team_id"
+        hand_col = f"{side}_opp_starter_hand"
+        tg = target[["game_pk", "game_datetime_utc", team_col, hand_col]].rename(columns={team_col: "team_id", hand_col: "opp_starter_hand"})
+        tg["team_id"] = pd.to_numeric(tg["team_id"], errors="coerce")
+        rows = []
+        for (team_id, hand), g in tg.groupby(["team_id", "opp_starter_hand"], dropna=False):
+            g = g.sort_values("game_datetime_utc").copy()
+            if pd.isna(team_id) or hand not in {"L", "R"}:
+                for col in feature_cols + ["history_game_datetime_utc"]:
+                    g[col] = np.nan
+                rows.append(g)
+                continue
+            hist = roll[(roll["team_id"] == team_id) & (roll["opp_starter_hand"] == hand)].sort_values("game_datetime_utc")
+            if hist.empty:
+                for col in feature_cols + ["history_game_datetime_utc"]:
+                    g[col] = np.nan
+                rows.append(g)
+                continue
+            hist = hist[["team_id", "opp_starter_hand", "game_datetime_utc"] + feature_cols].rename(columns={"game_datetime_utc": "history_game_datetime_utc"})
+            merged = pd.merge_asof(
+                g.sort_values("game_datetime_utc"),
+                hist.sort_values("history_game_datetime_utc"),
+                left_on="game_datetime_utc",
+                right_on="history_game_datetime_utc",
+                by=["team_id", "opp_starter_hand"],
+                direction="backward",
+                allow_exact_matches=True,
+            )
+            rows.append(merged)
+        side_out = pd.concat(rows, ignore_index=True) if rows else tg
+        side_out[f"{side}_opp_starter_is_lhp"] = (side_out["opp_starter_hand"] == "L").astype(float)
+        side_out[f"{side}_opp_starter_is_rhp"] = (side_out["opp_starter_hand"] == "R").astype(float)
+        side_out = side_out.drop(columns=["game_datetime_utc", "team_id", "opp_starter_hand", "history_game_datetime_utc"], errors="ignore")
+        side_out = _prefix_columns(side_out, f"{side}_", exclude={"game_pk", f"{side}_opp_starter_is_lhp", f"{side}_opp_starter_is_rhp"})
+        outputs.append(side_out)
+
+    if not outputs:
+        return pd.DataFrame()
+    out = outputs[0]
+    for extra in outputs[1:]:
+        out = out.merge(extra, on="game_pk", how="outer")
+
+    for col in list(out.columns):
+        if not col.startswith("home_team_vs_hand_"):
+            continue
+        away_col = col.replace("home_", "away_", 1)
+        if away_col in out.columns and pd.api.types.is_numeric_dtype(out[col]) and pd.api.types.is_numeric_dtype(out[away_col]):
+            out[f"diff_{col.replace('home_', '', 1)}"] = out[col] - out[away_col]
+    return out
+
+
 def build_game_feature_frame(
     games: pd.DataFrame,
     odds_consensus: Optional[pd.DataFrame] = None,
     include_future: bool = True,
+    pitcher_stats: Optional[pd.DataFrame] = None,
+    team_game_stats: Optional[pd.DataFrame] = None,
 ) -> pd.DataFrame:
     if games.empty:
         return pd.DataFrame()
@@ -236,6 +539,14 @@ def build_game_feature_frame(
     if "home_games_played_to_date" in frame.columns and "away_games_played_to_date" in frame.columns:
         frame["diff_games_played_to_date"] = frame["home_games_played_to_date"] - frame["away_games_played_to_date"]
 
+    starter_features = build_starter_feature_frame(games, pitcher_stats)
+    if not starter_features.empty:
+        frame = frame.merge(starter_features, on="game_pk", how="left")
+
+    team_vs_hand = build_team_vs_hand_feature_frame(games, team_game_stats, pitcher_stats, starter_features=starter_features)
+    if not team_vs_hand.empty:
+        frame = frame.merge(team_vs_hand, on="game_pk", how="left")
+
     frame["game_month"] = pd.to_datetime(frame["game_datetime_utc"], utc=True, errors="coerce").dt.month
     frame["game_dayofweek"] = pd.to_datetime(frame["game_datetime_utc"], utc=True, errors="coerce").dt.dayofweek
 
@@ -254,7 +565,16 @@ def build_game_feature_frame(
     return frame.sort_values(["game_datetime_utc", "game_pk"]).reset_index(drop=True)
 
 
-def get_model_feature_columns(frame: pd.DataFrame) -> list[str]:
+def _is_market_feature(col: str) -> bool:
+    lower = col.lower()
+    return any(keyword in lower for keyword in MARKET_KEYWORDS)
+
+
+def get_model_feature_columns(
+    frame: pd.DataFrame,
+    include_market: bool = False,
+    min_non_null_rate: float = 0.05,
+) -> list[str]:
     blocked = set(POSTGAME_COLUMNS) | {
         "game_pk", "season", "game_type", "official_date", "game_datetime_utc",
         "venue_name", "home_team_name", "home_team_norm", "away_team_name", "away_team_norm",
@@ -264,7 +584,16 @@ def get_model_feature_columns(frame: pd.DataFrame) -> list[str]:
         "event_id", "event_date", "odds_home_team", "odds_away_team",
     }
     numeric_cols = frame.select_dtypes(include=[np.number, "bool"]).columns.tolist()
-    return [c for c in numeric_cols if c not in blocked and not c.endswith("_score")]
+    feature_cols = []
+    for c in numeric_cols:
+        if c in blocked or c.endswith("_score"):
+            continue
+        if not include_market and _is_market_feature(c):
+            continue
+        if min_non_null_rate is not None and frame[c].notna().mean() < min_non_null_rate:
+            continue
+        feature_cols.append(c)
+    return feature_cols
 
 
 def save_features(frame: pd.DataFrame, output_path: Path | str) -> Path:

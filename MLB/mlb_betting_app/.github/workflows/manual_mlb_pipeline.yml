@@ -20,14 +20,19 @@ on:
     - cron: "37 13 * * *"
 
 permissions:
-  contents: read
+  contents: write
   actions: read
+
+concurrency:
+  group: mlb-pipeline
+  cancel-in-progress: false
 
 jobs:
   run-mlb-pipeline:
     runs-on: ubuntu-latest
 
     env:
+      APP_DIR: MLB/mlb_betting_app
       ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
       ODDS_DB_PATH: data/odds.db
       DATA_DIR: data
@@ -40,6 +45,12 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Show repository structure
+        run: |
+          pwd
+          find . -maxdepth 4 -name requirements.txt -print
+          find . -maxdepth 4 -name 00_init_db.py -print
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -47,18 +58,23 @@ jobs:
 
       - name: Install dependencies
         run: |
+          cd "$APP_DIR"
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Create folders
         run: |
+          cd "$APP_DIR"
           mkdir -p data/raw data/processed data/predictions models
 
       - name: Initialize database
-        run: python scripts/00_init_db.py
+        run: |
+          cd "$APP_DIR"
+          python scripts/00_init_db.py
 
       - name: Fetch odds
         run: |
+          cd "$APP_DIR"
           python scripts/01_fetch_odds.py \
             --sport baseball_mlb \
             --regions us \
@@ -66,21 +82,29 @@ jobs:
 
       - name: Fetch MLB games
         run: |
+          cd "$APP_DIR"
           python scripts/02_fetch_mlb_games.py \
             --days-back "${{ github.event.inputs.days_back || '730' }}" \
             --days-forward "${{ github.event.inputs.days_forward || '14' }}"
 
       - name: QA smoke test
-        run: python scripts/qa_smoke_test.py
+        run: |
+          cd "$APP_DIR"
+          python scripts/qa_smoke_test.py
 
       - name: Build features
-        run: python scripts/03_build_features.py
+        run: |
+          cd "$APP_DIR"
+          python scripts/03_build_features.py
 
       - name: Train moneyline model
-        run: python scripts/04_train_moneyline_model.py --tune --calibrate --min-rows 100
+        run: |
+          cd "$APP_DIR"
+          python scripts/04_train_moneyline_model.py --tune --calibrate --min-rows 100
 
       - name: Score upcoming games
         run: |
+          cd "$APP_DIR"
           python scripts/05_score_today.py \
             --days-forward "${{ github.event.inputs.days_forward || '14' }}"
 
@@ -89,7 +113,22 @@ jobs:
         with:
           name: mlb-pipeline-outputs
           path: |
-            data/odds.db
-            data/processed/**
-            data/predictions/**
-            models/**
+            ${{ env.APP_DIR }}/data/odds.db
+            ${{ env.APP_DIR }}/data/processed/**
+            ${{ env.APP_DIR }}/data/predictions/**
+            ${{ env.APP_DIR }}/models/**
+
+      - name: Commit updated pipeline outputs
+        run: |
+          cd "$APP_DIR"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add -f data/odds.db
+          git add data/processed
+          git add data/predictions
+          git add models
+
+          git commit -m "Update MLB pipeline outputs" || echo "No changes to commit"
+          git push

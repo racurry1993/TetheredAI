@@ -111,6 +111,70 @@ CREATE TABLE IF NOT EXISTS mlb_games (
 CREATE INDEX IF NOT EXISTS idx_mlb_games_date ON mlb_games(official_date);
 CREATE INDEX IF NOT EXISTS idx_mlb_games_teams ON mlb_games(home_team_norm, away_team_norm, official_date);
 
+
+CREATE TABLE IF NOT EXISTS mlb_pitcher_game_stats (
+    game_pk INTEGER NOT NULL,
+    pitcher_id INTEGER NOT NULL,
+    team_id INTEGER,
+    opponent_team_id INTEGER,
+    is_home INTEGER,
+    pitcher_name TEXT,
+    pitcher_hand TEXT,
+    is_starter INTEGER NOT NULL DEFAULT 0,
+    decision TEXT,
+    innings_pitched REAL,
+    outs_pitched INTEGER,
+    hits INTEGER,
+    runs INTEGER,
+    earned_runs INTEGER,
+    walks INTEGER,
+    strikeouts INTEGER,
+    home_runs INTEGER,
+    pitches_thrown INTEGER,
+    batters_faced INTEGER,
+    official_date TEXT,
+    game_datetime_utc TEXT,
+    last_updated_utc TEXT NOT NULL,
+    PRIMARY KEY(game_pk, pitcher_id, team_id),
+    FOREIGN KEY(game_pk) REFERENCES mlb_games(game_pk)
+);
+
+CREATE INDEX IF NOT EXISTS idx_mlb_pitcher_game_stats_pitcher_date
+    ON mlb_pitcher_game_stats(pitcher_id, game_datetime_utc);
+CREATE INDEX IF NOT EXISTS idx_mlb_pitcher_game_stats_game_starter
+    ON mlb_pitcher_game_stats(game_pk, is_starter);
+
+CREATE TABLE IF NOT EXISTS mlb_team_game_stats (
+    game_pk INTEGER NOT NULL,
+    team_id INTEGER NOT NULL,
+    opponent_team_id INTEGER,
+    is_home INTEGER,
+    at_bats INTEGER,
+    runs INTEGER,
+    hits INTEGER,
+    doubles INTEGER,
+    triples INTEGER,
+    home_runs INTEGER,
+    rbi INTEGER,
+    walks INTEGER,
+    strikeouts INTEGER,
+    left_on_base INTEGER,
+    stolen_bases INTEGER,
+    caught_stealing INTEGER,
+    avg REAL,
+    obp REAL,
+    slg REAL,
+    ops REAL,
+    official_date TEXT,
+    game_datetime_utc TEXT,
+    last_updated_utc TEXT NOT NULL,
+    PRIMARY KEY(game_pk, team_id),
+    FOREIGN KEY(game_pk) REFERENCES mlb_games(game_pk)
+);
+
+CREATE INDEX IF NOT EXISTS idx_mlb_team_game_stats_team_date
+    ON mlb_team_game_stats(team_id, game_datetime_utc);
+
 CREATE TABLE IF NOT EXISTS model_runs (
     run_id TEXT PRIMARY KEY,
     created_at_utc TEXT NOT NULL,
@@ -284,3 +348,83 @@ def insert_prediction_rows(conn: sqlite3.Connection, rows: Iterable[Mapping]) ->
         )
         count += 1
     return count
+
+
+def upsert_mlb_pitcher_game_stat(conn: sqlite3.Connection, row: Mapping) -> None:
+    conn.execute(
+        """
+        INSERT INTO mlb_pitcher_game_stats (
+            game_pk, pitcher_id, team_id, opponent_team_id, is_home, pitcher_name,
+            pitcher_hand, is_starter, decision, innings_pitched, outs_pitched,
+            hits, runs, earned_runs, walks, strikeouts, home_runs, pitches_thrown,
+            batters_faced, official_date, game_datetime_utc, last_updated_utc
+        ) VALUES (
+            :game_pk, :pitcher_id, :team_id, :opponent_team_id, :is_home, :pitcher_name,
+            :pitcher_hand, :is_starter, :decision, :innings_pitched, :outs_pitched,
+            :hits, :runs, :earned_runs, :walks, :strikeouts, :home_runs, :pitches_thrown,
+            :batters_faced, :official_date, :game_datetime_utc, :last_updated_utc
+        )
+        ON CONFLICT(game_pk, pitcher_id, team_id) DO UPDATE SET
+            opponent_team_id=excluded.opponent_team_id,
+            is_home=excluded.is_home,
+            pitcher_name=excluded.pitcher_name,
+            pitcher_hand=excluded.pitcher_hand,
+            is_starter=excluded.is_starter,
+            decision=excluded.decision,
+            innings_pitched=excluded.innings_pitched,
+            outs_pitched=excluded.outs_pitched,
+            hits=excluded.hits,
+            runs=excluded.runs,
+            earned_runs=excluded.earned_runs,
+            walks=excluded.walks,
+            strikeouts=excluded.strikeouts,
+            home_runs=excluded.home_runs,
+            pitches_thrown=excluded.pitches_thrown,
+            batters_faced=excluded.batters_faced,
+            official_date=excluded.official_date,
+            game_datetime_utc=excluded.game_datetime_utc,
+            last_updated_utc=excluded.last_updated_utc
+        """,
+        dict(row),
+    )
+
+
+def upsert_mlb_team_game_stat(conn: sqlite3.Connection, row: Mapping) -> None:
+    conn.execute(
+        """
+        INSERT INTO mlb_team_game_stats (
+            game_pk, team_id, opponent_team_id, is_home, at_bats, runs, hits,
+            doubles, triples, home_runs, rbi, walks, strikeouts, left_on_base,
+            stolen_bases, caught_stealing, avg, obp, slg, ops,
+            official_date, game_datetime_utc, last_updated_utc
+        ) VALUES (
+            :game_pk, :team_id, :opponent_team_id, :is_home, :at_bats, :runs, :hits,
+            :doubles, :triples, :home_runs, :rbi, :walks, :strikeouts, :left_on_base,
+            :stolen_bases, :caught_stealing, :avg, :obp, :slg, :ops,
+            :official_date, :game_datetime_utc, :last_updated_utc
+        )
+        ON CONFLICT(game_pk, team_id) DO UPDATE SET
+            opponent_team_id=excluded.opponent_team_id,
+            is_home=excluded.is_home,
+            at_bats=excluded.at_bats,
+            runs=excluded.runs,
+            hits=excluded.hits,
+            doubles=excluded.doubles,
+            triples=excluded.triples,
+            home_runs=excluded.home_runs,
+            rbi=excluded.rbi,
+            walks=excluded.walks,
+            strikeouts=excluded.strikeouts,
+            left_on_base=excluded.left_on_base,
+            stolen_bases=excluded.stolen_bases,
+            caught_stealing=excluded.caught_stealing,
+            avg=excluded.avg,
+            obp=excluded.obp,
+            slg=excluded.slg,
+            ops=excluded.ops,
+            official_date=excluded.official_date,
+            game_datetime_utc=excluded.game_datetime_utc,
+            last_updated_utc=excluded.last_updated_utc
+        """,
+        dict(row),
+    )
