@@ -226,28 +226,69 @@ def _safe_div(num: pd.Series, den: pd.Series) -> pd.Series:
 
 
 def _compute_pitcher_starter_rollups(pitcher_stats: pd.DataFrame) -> pd.DataFrame:
+    """Build leakage-safe starter history features.
+
+    This intentionally avoids ``groupby.apply`` because newer pandas versions can
+    drop grouping columns from the frame passed to ``apply``. That caused
+    ``pitcher_id`` to disappear in GitHub Actions. A plain loop is more verbose
+    but much more stable across pandas versions.
+    """
     if pitcher_stats is None or pitcher_stats.empty:
         return pd.DataFrame()
+
+    required_cols = {"pitcher_id", "game_datetime_utc", "game_pk", "is_starter"}
+    missing_required = required_cols - set(pitcher_stats.columns)
+    if missing_required:
+        LOGGER.warning("Pitcher stats missing required columns: %s", sorted(missing_required))
+        return pd.DataFrame()
+
     df = pitcher_stats.copy()
     df = df[(pd.to_numeric(df.get("is_starter", 0), errors="coerce") == 1)].copy()
     if df.empty:
+        LOGGER.warning("No starter pitcher rows found in pitcher stats table.")
         return pd.DataFrame()
 
     df["game_datetime_utc"] = pd.to_datetime(df["game_datetime_utc"], utc=True, errors="coerce")
-    for col in ["pitcher_id", "outs_pitched", "earned_runs", "hits", "walks", "strikeouts", "home_runs", "batters_faced", "pitches_thrown"]:
+
+    stat_cols = [
+        "outs_pitched", "earned_runs", "hits", "walks",
+        "strikeouts", "home_runs", "batters_faced", "pitches_thrown",
+    ]
+
+    # Be tolerant of partial boxscore payloads. Missing stat columns become NaN,
+    # then rolling ratios naturally remain NaN until enough history exists.
+    for col in stat_cols:
+        if col not in df.columns:
+            df[col] = np.nan
+
+    for col in ["pitcher_id", *stat_cols]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    if "pitcher_name" not in df.columns:
+        df["pitcher_name"] = np.nan
+    if "pitcher_hand" not in df.columns:
+        df["pitcher_hand"] = np.nan
+
     df = df.dropna(subset=["pitcher_id", "game_datetime_utc"]).sort_values(["pitcher_id", "game_datetime_utc", "game_pk"])
+    if df.empty:
+        LOGGER.warning("No starter pitcher rows remained after dropping missing pitcher_id/game_datetime_utc.")
+        return pd.DataFrame()
 
-    stat_cols = ["outs_pitched", "earned_runs", "hits", "walks", "strikeouts", "home_runs", "batters_faced", "pitches_thrown"]
+    outputs = []
 
-    def transform(g: pd.DataFrame) -> pd.DataFrame:
+    for pitcher_id, g in df.groupby("pitcher_id", dropna=False, sort=False):
         g = g.sort_values(["game_datetime_utc", "game_pk"]).copy()
+        g["pitcher_id"] = pitcher_id
         g["pitcher_hand"] = g["pitcher_hand"].ffill().bfill()
+
         shifted = g[stat_cols].shift(1)
         shifted_start = pd.Series(1.0, index=g.index).shift(1)
+
         g["starter_games_to_date"] = shifted_start.expanding(min_periods=1).sum()
-        g["starter_days_since_last_start"] = (g["game_datetime_utc"] - g["game_datetime_utc"].shift(1)).dt.total_seconds() / 86400.0
+        g["starter_days_since_last_start"] = (
+            g["game_datetime_utc"] - g["game_datetime_utc"].shift(1)
+        ).dt.total_seconds() / 86400.0
 
         windows: list[tuple[str, Optional[int]]] = [("season_to_date", None)] + [(f"last{w}", w) for w in PITCHER_WINDOWS]
         for suffix, window in windows:
@@ -268,14 +309,21 @@ def _compute_pitcher_starter_rollups(pitcher_stats: pd.DataFrame) -> pd.DataFram
             g[f"starter_k_minus_bb_per_bf_{suffix}"] = _safe_div(sums["strikeouts"] - sums["walks"], sums["batters_faced"])
             g[f"starter_ip_per_start_{suffix}"] = _safe_div(innings, starts)
             g[f"starter_pitches_per_start_{suffix}"] = _safe_div(sums["pitches_thrown"], starts)
-        return g
 
-    out = df.groupby("pitcher_id", group_keys=False, dropna=False).apply(transform).reset_index(drop=True)
+        outputs.append(g)
+
+    if not outputs:
+        return pd.DataFrame()
+
+    out = pd.concat(outputs, ignore_index=True)
+
     keep_cols = [
         "game_pk", "game_datetime_utc", "pitcher_id", "pitcher_name", "pitcher_hand",
         "starter_games_to_date", "starter_days_since_last_start",
     ]
     keep_cols += [c for c in out.columns if c.startswith("starter_") and c not in keep_cols]
+    keep_cols = [c for c in keep_cols if c in out.columns]
+
     return out[keep_cols].sort_values(["pitcher_id", "game_datetime_utc", "game_pk"]).reset_index(drop=True)
 
 
