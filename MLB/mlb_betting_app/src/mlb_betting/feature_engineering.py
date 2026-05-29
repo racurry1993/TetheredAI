@@ -328,32 +328,73 @@ def _compute_pitcher_starter_rollups(pitcher_stats: pd.DataFrame) -> pd.DataFram
 
 
 def _asof_merge_by_key(target: pd.DataFrame, history: pd.DataFrame, key_col: str, date_col: str, feature_cols: list[str]) -> pd.DataFrame:
+    """As-of merge history features onto target rows within each entity key.
+
+    We loop by ``key_col`` before calling ``merge_asof``, so using the
+    ``by=`` argument is unnecessary. Avoiding ``by=`` also prevents pandas
+    merge errors when one side materializes identifiers as float64 because of
+    missing values while the other side keeps them as int64.
+    """
+    if target is None or target.empty:
+        return target
+    if history is None or history.empty:
+        out = target.copy()
+        for col in feature_cols + ["history_game_datetime_utc"]:
+            out[col] = np.nan
+        return out
+
+    target = target.copy()
+    history = history.copy()
+
+    # Normalize join keys and timestamps. Probable pitcher IDs can contain nulls,
+    # which makes pandas represent the column as float; boxscore pitcher IDs are
+    # often int. Numeric normalization makes the per-key filter stable.
+    target[key_col] = pd.to_numeric(target[key_col], errors="coerce")
+    history[key_col] = pd.to_numeric(history[key_col], errors="coerce")
+    target[date_col] = pd.to_datetime(target[date_col], utc=True, errors="coerce")
+    history[date_col] = pd.to_datetime(history[date_col], utc=True, errors="coerce")
+
     rows = []
     empty_cols = feature_cols + ["history_game_datetime_utc"]
-    for key, tg in target.groupby(key_col, dropna=False):
+
+    for key, tg in target.groupby(key_col, dropna=False, sort=False):
         tg = tg.sort_values(date_col).copy()
+
         if pd.isna(key):
             for col in empty_cols:
                 tg[col] = np.nan
             rows.append(tg)
             continue
+
         hist = history[history[key_col] == key].sort_values(date_col).copy()
         if hist.empty:
             for col in empty_cols:
                 tg[col] = np.nan
             rows.append(tg)
             continue
-        hist = hist[[key_col, date_col] + feature_cols].rename(columns={date_col: "history_game_datetime_utc"})
+
+        available_feature_cols = [c for c in feature_cols if c in hist.columns]
+        hist = hist[[date_col] + available_feature_cols].rename(columns={date_col: "history_game_datetime_utc"})
+
+        # Because we already filtered history to the same key, this merge does
+        # not need ``by=key_col``. That avoids int/float identifier dtype issues.
         merged = pd.merge_asof(
             tg.sort_values(date_col),
             hist.sort_values("history_game_datetime_utc"),
             left_on=date_col,
             right_on="history_game_datetime_utc",
-            by=key_col,
             direction="backward",
             allow_exact_matches=True,
         )
+
+        for col in feature_cols:
+            if col not in merged.columns:
+                merged[col] = np.nan
+        if "history_game_datetime_utc" not in merged.columns:
+            merged["history_game_datetime_utc"] = np.nan
+
         rows.append(merged)
+
     return pd.concat(rows, ignore_index=True) if rows else target
 
 
