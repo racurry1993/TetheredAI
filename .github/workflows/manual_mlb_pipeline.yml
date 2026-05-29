@@ -3,6 +3,10 @@ name: Manual MLB Pipeline
 on:
   workflow_dispatch:
     inputs:
+      fetch_odds:
+        description: "Fetch fresh odds from The Odds API?"
+        required: true
+        default: "false"
       markets:
         description: "Odds markets to fetch"
         required: true
@@ -16,8 +20,11 @@ on:
         required: true
         default: "14"
 
-  schedule:
-    - cron: "37 13 * * *"
+  # Temporarily paused while debugging so we do not accidentally burn API calls.
+  # Re-enable later when the pipeline is stable.
+  #
+  # schedule:
+  #   - cron: "37 13 * * *"
 
 permissions:
   contents: write
@@ -48,8 +55,10 @@ jobs:
       - name: Show repository structure
         run: |
           pwd
-          find . -maxdepth 3 -name requirements.txt -print
-          find . -maxdepth 3 -name 00_init_db.py -print
+          find . -maxdepth 5 -name requirements.txt -print
+          find . -maxdepth 5 -name 00_init_db.py -print
+          find . -maxdepth 5 -name 02_fetch_mlb_games.py -print
+          find . -maxdepth 5 -name 03_build_features.py -print
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -73,19 +82,27 @@ jobs:
           python scripts/00_init_db.py
 
       - name: Fetch odds
+        if: ${{ inputs.fetch_odds == 'true' }}
         run: |
           cd "$APP_DIR"
           python scripts/01_fetch_odds.py \
             --sport baseball_mlb \
             --regions us \
-            --markets "${{ github.event.inputs.markets || 'h2h' }}"
+            --markets "${{ inputs.markets }}"
+
+      - name: Skip odds fetch
+        if: ${{ inputs.fetch_odds != 'true' }}
+        run: |
+          echo "Skipping Odds API call because fetch_odds=false"
 
       - name: Fetch MLB games
         run: |
           cd "$APP_DIR"
           python scripts/02_fetch_mlb_games.py \
-            --days-back "${{ github.event.inputs.days_back || '730' }}" \
-            --days-forward "${{ github.event.inputs.days_forward || '14' }}"
+            --days-back "${{ inputs.days_back }}" \
+            --days-forward "${{ inputs.days_forward }}" \
+            --game-type R \
+            --chunk-days 30
 
       - name: QA smoke test
         run: |
@@ -97,6 +114,54 @@ jobs:
           cd "$APP_DIR"
           python scripts/03_build_features.py
 
+      - name: Inspect feature dates
+        run: |
+          cd "$APP_DIR"
+          python - <<'PY'
+          import pandas as pd
+          from pathlib import Path
+
+          path = Path("data/processed/mlb_game_features.parquet")
+          print("Feature file exists:", path.exists())
+
+          if not path.exists():
+              raise SystemExit("Feature file was not created.")
+
+          df = pd.read_parquet(path)
+
+          print("Rows:", len(df))
+          print("Columns:", len(df.columns))
+          print("Column list:")
+          print(list(df.columns))
+
+          if "game_datetime_utc" in df.columns:
+              df["game_datetime_utc"] = pd.to_datetime(df["game_datetime_utc"], utc=True, errors="coerce")
+              print("Min game datetime:", df["game_datetime_utc"].min())
+              print("Max game datetime:", df["game_datetime_utc"].max())
+
+          if "target_home_win" in df.columns:
+              print("Completed rows:", df["target_home_win"].notna().sum())
+              print("Future/scheduled rows:", df["target_home_win"].isna().sum())
+
+          preview_cols = [
+              c for c in [
+                  "official_date",
+                  "game_datetime_utc",
+                  "home_team_name",
+                  "away_team_name",
+                  "target_home_win",
+                  "detailed_state",
+              ]
+              if c in df.columns
+          ]
+
+          print("Latest 25 games in feature file:")
+          if preview_cols:
+              print(df[preview_cols].tail(25).to_string(index=False))
+          else:
+              print(df.tail(25).to_string(index=False))
+          PY
+
       - name: Train moneyline model
         run: |
           cd "$APP_DIR"
@@ -106,7 +171,7 @@ jobs:
         run: |
           cd "$APP_DIR"
           python scripts/05_score_today.py \
-            --days-forward "${{ github.event.inputs.days_forward || '14' }}"
+            --days-forward "${{ inputs.days_forward }}"
 
       - name: Upload outputs
         uses: actions/upload-artifact@v4
@@ -126,7 +191,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           git add -f data/odds.db
-          git add data/processed
+          git add -f data/processed
           git add -f data/predictions
           git add -f models
 
