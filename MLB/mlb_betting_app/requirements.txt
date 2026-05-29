@@ -10,3 +10,7 @@ statsmodels>=0.14.0
 jupyterlab>=4.0.0
 ipykernel>=6.29.0
 tqdm>=4.66.0
+streamlit>=1.35
+pillow>=10.0
+xgboost>=2.1.0
+lightgbm>=4.3.0
