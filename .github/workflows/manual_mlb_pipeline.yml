@@ -127,8 +127,8 @@ jobs:
 
           git add -f data/odds.db
           git add data/processed
-          git add data/predictions
-          git add models
+          git add -f data/predictions
+          git add -f models
 
           git commit -m "Update MLB pipeline outputs" || echo "No changes to commit"
           git push
