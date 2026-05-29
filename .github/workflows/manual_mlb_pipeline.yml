@@ -20,8 +20,12 @@ on:
     - cron: "37 13 * * *"
 
 permissions:
-  contents: read
+  contents: write
   actions: read
+
+concurrency:
+  group: mlb-pipeline
+  cancel-in-progress: false
 
 jobs:
   run-mlb-pipeline:
@@ -113,3 +117,18 @@ jobs:
             ${{ env.APP_DIR }}/data/processed/**
             ${{ env.APP_DIR }}/data/predictions/**
             ${{ env.APP_DIR }}/models/**
+
+      - name: Commit updated pipeline outputs
+        run: |
+          cd "$APP_DIR"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add -f data/odds.db
+          git add data/processed
+          git add data/predictions
+          git add models
+
+          git commit -m "Update MLB pipeline outputs" || echo "No changes to commit"
+          git push
