@@ -414,7 +414,7 @@ def build_starter_feature_frame(games: pd.DataFrame, pitcher_stats: Optional[pd.
             continue
         target = games[["game_pk", "game_datetime_utc", pitcher_col]].rename(columns={pitcher_col: "pitcher_id"})
         target["pitcher_id"] = pd.to_numeric(target["pitcher_id"], errors="coerce")
-        merged = _asof_merge_by_key(target, roll.rename(columns={"pitcher_id": "pitcher_id"}), "pitcher_id", "game_datetime_utc", feature_cols)
+        merged = _asof_merge_by_key(target, roll, "pitcher_id", "game_datetime_utc", feature_cols)
         merged = merged.drop(columns=["pitcher_id", "game_datetime_utc", "history_game_datetime_utc"], errors="ignore")
         merged = _prefix_columns(merged, f"{side}_", exclude={"game_pk"})
         merged = merged.rename(columns={
@@ -428,14 +428,18 @@ def build_starter_feature_frame(games: pd.DataFrame, pitcher_stats: Optional[pd.
     for extra in outputs[1:]:
         out = out.merge(extra, on="game_pk", how="outer")
 
-    # Starter matchup differentials. Lower ERA/WHIP/BB/HR is better, but keep raw home-away diffs for transparency.
+    # Starter matchup differentials. Build all diff columns at once to avoid pandas fragmentation warnings.
+    diff_data = {}
     for col in list(out.columns):
         if not col.startswith("home_starter_"):
             continue
         away_col = col.replace("home_", "away_", 1)
         if away_col in out.columns and pd.api.types.is_numeric_dtype(out[col]) and pd.api.types.is_numeric_dtype(out[away_col]):
-            out[f"diff_{col.replace('home_', '', 1)}"] = out[col] - out[away_col]
+            diff_data[f"diff_{col.replace('home_', '', 1)}"] = out[col] - out[away_col]
+    if diff_data:
+        out = pd.concat([out, pd.DataFrame(diff_data, index=out.index)], axis=1).copy()
     return out
+
 
 
 def _get_actual_starter_hands(pitcher_stats: pd.DataFrame) -> pd.DataFrame:
@@ -451,38 +455,73 @@ def _get_actual_starter_hands(pitcher_stats: pd.DataFrame) -> pd.DataFrame:
 
 
 def _compute_team_vs_hand_rollups(team_stats: pd.DataFrame, games: pd.DataFrame, pitcher_stats: pd.DataFrame) -> pd.DataFrame:
+    """Build leakage-safe rolling team hitting stats against opponent starter handedness.
+
+    This avoids ``groupby().apply()`` because some pandas versions drop grouping
+    columns after apply, which caused KeyError for team_id/opp_starter_hand.
+    """
     if team_stats is None or team_stats.empty or pitcher_stats is None or pitcher_stats.empty:
         return pd.DataFrame()
+
+    required_cols = {"game_pk", "game_datetime_utc", "team_id", "is_home"}
+    if not required_cols.issubset(set(team_stats.columns)):
+        missing = sorted(required_cols - set(team_stats.columns))
+        LOGGER.warning("Skipping team-vs-hand features because team stats are missing columns: %s", missing)
+        return pd.DataFrame()
+
     hands = _get_actual_starter_hands(pitcher_stats)
     if hands.empty:
         return pd.DataFrame()
+
     ts = team_stats.copy()
     ts["game_datetime_utc"] = pd.to_datetime(ts["game_datetime_utc"], utc=True, errors="coerce")
+    ts["team_id"] = pd.to_numeric(ts["team_id"], errors="coerce")
+    ts["is_home"] = pd.to_numeric(ts["is_home"], errors="coerce")
     ts = ts.merge(hands, on="game_pk", how="left")
     ts["opp_starter_hand"] = np.where(ts["is_home"] == 1, ts["away_actual_starter_hand"], ts["home_actual_starter_hand"])
+    ts["opp_starter_hand"] = ts["opp_starter_hand"].astype("string")
     ts = ts[ts["opp_starter_hand"].isin(["L", "R"])].copy()
+    ts = ts[ts["team_id"].notna()].copy()
     if ts.empty:
         return pd.DataFrame()
-    for col in ["runs", "hits", "home_runs", "walks", "strikeouts", "at_bats", "ops", "obp", "slg"]:
-        if col in ts.columns:
-            ts[col] = pd.to_numeric(ts[col], errors="coerce")
+
+    numeric_source_cols = ["runs", "hits", "home_runs", "walks", "strikeouts", "at_bats", "ops", "obp", "slg"]
+    for col in numeric_source_cols:
+        if col not in ts.columns:
+            ts[col] = np.nan
+        ts[col] = pd.to_numeric(ts[col], errors="coerce")
+
     ts["bb_per_ab"] = _safe_div(ts["walks"], ts["at_bats"])
     ts["k_per_ab"] = _safe_div(ts["strikeouts"], ts["at_bats"])
     stat_cols = ["runs", "home_runs", "bb_per_ab", "k_per_ab", "ops", "obp", "slg"]
 
-    def transform(g: pd.DataFrame) -> pd.DataFrame:
+    outputs = []
+    for (team_id, hand), g in ts.groupby(["team_id", "opp_starter_hand"], dropna=False, sort=False):
+        if pd.isna(team_id) or hand not in {"L", "R"}:
+            continue
         g = g.sort_values(["game_datetime_utc", "game_pk"]).copy()
+        g["team_id"] = team_id
+        g["opp_starter_hand"] = hand
         g["team_vs_hand_games_to_date"] = pd.Series(1.0, index=g.index).shift(1).expanding(min_periods=1).sum()
+
+        new_cols = {}
         for col in stat_cols:
             shifted = g[col].shift(1)
-            g[f"team_vs_hand_{col}_season_to_date"] = shifted.expanding(min_periods=1).mean()
+            new_cols[f"team_vs_hand_{col}_season_to_date"] = shifted.expanding(min_periods=1).mean()
             for window in TEAM_VS_HAND_WINDOWS:
-                g[f"team_vs_hand_{col}_last{window}"] = shifted.rolling(window=window, min_periods=1).mean()
-        return g
+                new_cols[f"team_vs_hand_{col}_last{window}"] = shifted.rolling(window=window, min_periods=1).mean()
+        if new_cols:
+            g = pd.concat([g, pd.DataFrame(new_cols, index=g.index)], axis=1).copy()
+        outputs.append(g)
 
-    out = ts.groupby(["team_id", "opp_starter_hand"], group_keys=False, dropna=False).apply(transform).reset_index(drop=True)
+    if not outputs:
+        return pd.DataFrame()
+
+    out = pd.concat(outputs, ignore_index=True)
     keep = ["game_pk", "game_datetime_utc", "team_id", "opp_starter_hand", "team_vs_hand_games_to_date"]
     keep += [c for c in out.columns if c.startswith("team_vs_hand_") and c not in keep]
+    keep = [c for c in keep if c in out.columns]
+
     return out[keep].sort_values(["team_id", "opp_starter_hand", "game_datetime_utc", "game_pk"]).reset_index(drop=True)
 
 
@@ -500,7 +539,12 @@ def build_team_vs_hand_feature_frame(
 
     games = games.copy()
     games["game_datetime_utc"] = pd.to_datetime(games["game_datetime_utc"], utc=True, errors="coerce")
-    target = games[["game_pk", "game_datetime_utc", "home_team_id", "away_team_id"]].copy()
+    required_cols = ["game_pk", "game_datetime_utc", "home_team_id", "away_team_id"]
+    if not set(required_cols).issubset(games.columns):
+        missing = sorted(set(required_cols) - set(games.columns))
+        LOGGER.warning("Skipping team-vs-hand features because games are missing columns: %s", missing)
+        return pd.DataFrame()
+    target = games[required_cols].copy()
 
     if starter_features is not None and not starter_features.empty:
         hand_cols = [c for c in ["game_pk", "home_starter_pitcher_hand", "away_starter_pitcher_hand"] if c in starter_features.columns]
@@ -511,8 +555,9 @@ def build_team_vs_hand_feature_frame(
     actual_hands = _get_actual_starter_hands(pitcher_stats)
     if not actual_hands.empty:
         target = target.merge(actual_hands, on="game_pk", how="left")
-    target["home_opp_starter_hand"] = target.get("away_starter_pitcher_hand")
-    target["away_opp_starter_hand"] = target.get("home_starter_pitcher_hand")
+
+    target["home_opp_starter_hand"] = target["away_starter_pitcher_hand"] if "away_starter_pitcher_hand" in target.columns else np.nan
+    target["away_opp_starter_hand"] = target["home_starter_pitcher_hand"] if "home_starter_pitcher_hand" in target.columns else np.nan
     if "away_actual_starter_hand" in target.columns:
         target["home_opp_starter_hand"] = target["home_opp_starter_hand"].fillna(target["away_actual_starter_hand"])
     if "home_actual_starter_hand" in target.columns:
@@ -525,31 +570,45 @@ def build_team_vs_hand_feature_frame(
         hand_col = f"{side}_opp_starter_hand"
         tg = target[["game_pk", "game_datetime_utc", team_col, hand_col]].rename(columns={team_col: "team_id", hand_col: "opp_starter_hand"})
         tg["team_id"] = pd.to_numeric(tg["team_id"], errors="coerce")
+        tg["opp_starter_hand"] = tg["opp_starter_hand"].astype("string")
+
         rows = []
-        for (team_id, hand), g in tg.groupby(["team_id", "opp_starter_hand"], dropna=False):
+        for (team_id, hand), g in tg.groupby(["team_id", "opp_starter_hand"], dropna=False, sort=False):
             g = g.sort_values("game_datetime_utc").copy()
             if pd.isna(team_id) or hand not in {"L", "R"}:
                 for col in feature_cols + ["history_game_datetime_utc"]:
                     g[col] = np.nan
                 rows.append(g)
                 continue
-            hist = roll[(roll["team_id"] == team_id) & (roll["opp_starter_hand"] == hand)].sort_values("game_datetime_utc")
+
+            hist = roll[(pd.to_numeric(roll["team_id"], errors="coerce") == team_id) & (roll["opp_starter_hand"].astype("string") == hand)].sort_values("game_datetime_utc").copy()
             if hist.empty:
                 for col in feature_cols + ["history_game_datetime_utc"]:
                     g[col] = np.nan
                 rows.append(g)
                 continue
-            hist = hist[["team_id", "opp_starter_hand", "game_datetime_utc"] + feature_cols].rename(columns={"game_datetime_utc": "history_game_datetime_utc"})
+
+            available_feature_cols = [c for c in feature_cols if c in hist.columns]
+            hist = hist[["game_datetime_utc"] + available_feature_cols].rename(columns={"game_datetime_utc": "history_game_datetime_utc"})
+
+            # We already filtered history to the same team and handedness, so do
+            # not use merge_asof(..., by=...). This avoids dtype mismatches and
+            # keeps the behavior consistent across pandas versions.
             merged = pd.merge_asof(
                 g.sort_values("game_datetime_utc"),
                 hist.sort_values("history_game_datetime_utc"),
                 left_on="game_datetime_utc",
                 right_on="history_game_datetime_utc",
-                by=["team_id", "opp_starter_hand"],
                 direction="backward",
                 allow_exact_matches=True,
             )
+            for col in feature_cols:
+                if col not in merged.columns:
+                    merged[col] = np.nan
+            if "history_game_datetime_utc" not in merged.columns:
+                merged["history_game_datetime_utc"] = np.nan
             rows.append(merged)
+
         side_out = pd.concat(rows, ignore_index=True) if rows else tg
         side_out[f"{side}_opp_starter_is_lhp"] = (side_out["opp_starter_hand"] == "L").astype(float)
         side_out[f"{side}_opp_starter_is_rhp"] = (side_out["opp_starter_hand"] == "R").astype(float)
@@ -563,13 +622,18 @@ def build_team_vs_hand_feature_frame(
     for extra in outputs[1:]:
         out = out.merge(extra, on="game_pk", how="outer")
 
+    # Team-vs-hand matchup differentials. Build all diff columns at once to avoid pandas fragmentation warnings.
+    diff_data = {}
     for col in list(out.columns):
         if not col.startswith("home_team_vs_hand_"):
             continue
         away_col = col.replace("home_", "away_", 1)
         if away_col in out.columns and pd.api.types.is_numeric_dtype(out[col]) and pd.api.types.is_numeric_dtype(out[away_col]):
-            out[f"diff_{col.replace('home_', '', 1)}"] = out[col] - out[away_col]
+            diff_data[f"diff_{col.replace('home_', '', 1)}"] = out[col] - out[away_col]
+    if diff_data:
+        out = pd.concat([out, pd.DataFrame(diff_data, index=out.index)], axis=1).copy()
     return out
+
 
 
 def build_game_feature_frame(
