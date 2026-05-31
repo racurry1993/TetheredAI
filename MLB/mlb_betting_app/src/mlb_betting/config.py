@@ -19,76 +19,39 @@ class Settings:
     odds_format: str
 
 
-def find_project_root() -> Path:
-    """
-    Find the project root from either:
-    - current working directory
-    - this config.py file location
-    """
-    candidates = []
-
-    cwd = Path.cwd().resolve()
-    candidates.extend([cwd, *cwd.parents])
-
-    file_path = Path(__file__).resolve()
-    candidates.extend([file_path, *file_path.parents])
-
-    for path in candidates:
-        if (path / "requirements.txt").exists() and (path / "src").exists():
+def find_project_root(start: Optional[Path] = None) -> Path:
+    start = (start or Path.cwd()).resolve()
+    for path in [start, *start.parents]:
+        if (path / "src").exists() and ((path / "requirements.txt").exists() or (path / "pyproject.toml").exists()):
             return path
+    return start
 
-    return Path.cwd().resolve()
 
-
-def load_local_env(env_path: Path) -> None:
-    """
-    Minimal .env loader using only the Python standard library.
-
-    Supports:
-        KEY=value
-
-    Ignores:
-        blank lines
-        comments beginning with #
-    """
-    if not env_path.exists():
+def _load_env_file(path: Path) -> None:
+    if not path.exists():
         return
-
-    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-
-        if not line or line.startswith("#"):
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
             continue
-
-        if "=" not in line:
-            continue
-
         key, value = line.split("=", 1)
         key = key.strip()
         value = value.strip().strip('"').strip("'")
-
         if key and key not in os.environ:
             os.environ[key] = value
 
 
+def _resolve(root: Path, value: str, default: Path) -> Path:
+    path = Path(os.getenv(value, str(default)))
+    return path if path.is_absolute() else root / path
+
+
 def get_settings() -> Settings:
     root = find_project_root()
-
-    env_path = root / ".env"
-    load_local_env(env_path)
-
-    data_dir = Path(os.getenv("DATA_DIR", "data"))
-    if not data_dir.is_absolute():
-        data_dir = root / data_dir
-
-    model_dir = Path(os.getenv("MODEL_DIR", "models"))
-    if not model_dir.is_absolute():
-        model_dir = root / model_dir
-
-    odds_db_path = Path(os.getenv("ODDS_DB_PATH", "data/odds.db"))
-    if not odds_db_path.is_absolute():
-        odds_db_path = root / odds_db_path
-
+    _load_env_file(root / ".env")
+    data_dir = _resolve(root, "DATA_DIR", root / "data")
+    model_dir = _resolve(root, "MODEL_DIR", root / "models")
+    odds_db_path = _resolve(root, "ODDS_DB_PATH", data_dir / "odds.db")
     return Settings(
         project_root=root,
         data_dir=data_dir,

@@ -223,9 +223,37 @@ def connect(db_path: Path | str) -> sqlite3.Connection:
     return conn
 
 
+PREDICTION_EXTRA_COLUMNS = {
+    "champion_model_run_id": "TEXT",
+    "champion_model_family": "TEXT",
+    "champion_feature_set": "TEXT",
+    "model_away_win_prob": "REAL",
+    "market_away_no_vig_prob": "REAL",
+    "edge_home": "REAL",
+    "edge_away": "REAL",
+    "home_ev_per_unit": "REAL",
+    "away_ev_per_unit": "REAL",
+    "has_market_odds": "INTEGER",
+    "recommended_team_type": "TEXT",
+    "recommended_model_prob": "REAL",
+    "recommended_market_prob": "REAL",
+    "kelly_fraction": "REAL",
+    "suggested_units": "REAL",
+    "no_bet_reason": "TEXT",
+}
+
+
+def _ensure_columns(conn: sqlite3.Connection, table: str, columns: Mapping[str, str]) -> None:
+    existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    for col, dtype in columns.items():
+        if col not in existing:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {dtype}")
+
+
 def init_db(db_path: Path | str) -> None:
     with connect(db_path) as conn:
         conn.executescript(SCHEMA_SQL)
+        _ensure_columns(conn, "predictions", PREDICTION_EXTRA_COLUMNS)
         conn.commit()
 
 

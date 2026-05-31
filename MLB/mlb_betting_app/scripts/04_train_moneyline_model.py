@@ -1,73 +1,66 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
 import sys
+
+import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-import pandas as pd
-
 from mlb_betting.config import get_settings
-from mlb_betting.db import connect, init_db
-from mlb_betting.logging_utils import configure_logging
-from mlb_betting.modeling import save_model_bundle, tune_moneyline_model
-from mlb_betting.data_validation import validate_no_obvious_leakage
+from mlb_betting.modeling import build_feature_sets, compare_models, export_champion_model
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Train and tune MLB moneyline model.")
-    parser.add_argument("--features", default=None, help="Feature parquet path")
-    parser.add_argument("--holdout-days", type=int, default=45)
-    parser.add_argument("--no-tune", dest="tune", action="store_false")
-    parser.add_argument("--tune", dest="tune", action="store_true")
-    parser.set_defaults(tune=True)
-    parser.add_argument("--calibrate", action="store_true")
-    parser.add_argument("--min-rows", type=int, default=100)
+    parser = argparse.ArgumentParser(description="Optional CLI trainer. Notebook-based manual promotion is preferred.")
+    parser.add_argument("--features", default=None)
+    parser.add_argument("--holdout-days", type=int, default=60)
+    parser.add_argument("--max-search-iter", type=int, default=25)
+    parser.add_argument("--model-name", default=None, help="Optional single model candidate, e.g. lightgbm or xgboost")
+    parser.add_argument("--promote-champion", action="store_true")
     return parser.parse_args()
 
 
 def main() -> None:
-    configure_logging()
     args = parse_args()
     settings = get_settings()
-    init_db(settings.odds_db_path)
     feature_path = Path(args.features) if args.features else settings.data_dir / "processed" / "mlb_game_features.parquet"
-    if not feature_path.exists():
-        raise SystemExit(f"Feature file not found: {feature_path}. Run scripts/03_build_features.py first.")
+    if not feature_path.is_absolute():
+        feature_path = settings.project_root / feature_path
     frame = pd.read_parquet(feature_path)
-    completed = frame[frame["target_home_win"].notna()].copy()
-    if len(completed) < args.min_rows:
-        raise SystemExit(f"Not enough completed games to train. Found {len(completed)}, need {args.min_rows}.")
-    result = tune_moneyline_model(
-        completed,
+    feature_sets = build_feature_sets(frame, min_non_null_rate=0.05)
+    model_names = [args.model_name] if args.model_name else None
+    comparison = compare_models(
+        frame,
+        feature_sets=feature_sets,
+        model_names=model_names,
         holdout_days=args.holdout_days,
-        tune=args.tune,
-        calibrate=args.calibrate,
+        tune=True,
+        calibrate=True,
+        max_search_iter=args.max_search_iter,
     )
-    validate_no_obvious_leakage(result["feature_cols"])
-    paths = save_model_bundle(result, settings.model_dir)
-    metadata = json.loads(paths["metadata_path"].read_text(encoding="utf-8"))
-    with connect(settings.odds_db_path) as conn:
-        conn.execute(
-            """
-            INSERT OR REPLACE INTO model_runs (
-                run_id, created_at_utc, model_name, target, train_start_date, train_end_date,
-                test_start_date, test_end_date, n_train, n_test, metrics_json, params_json,
-                feature_columns_json, artifact_path
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                result["run_id"], result["created_at_utc"], result["model_name"], result["target"],
-                result["train_start_date"], result["train_end_date"], result["test_start_date"], result["test_end_date"],
-                result["n_train"], result["n_test"], json.dumps(result["final_metrics"]),
-                json.dumps(result["search_results"], default=str), json.dumps(result["feature_cols"]), str(paths["model_path"]),
-            ),
+    results = comparison["results"].copy()
+    out = settings.data_dir / "processed" / "moneyline_model_comparison.csv"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    results.to_csv(out, index=False)
+    print("Best key:", comparison["best_key"])
+    print(results.sort_values(["holdout_log_loss", "holdout_brier"]).head(15).to_string(index=False))
+    if args.promote_champion:
+        best_key = comparison["best_key"]
+        best = comparison["fitted"][best_key]
+        row = results[results["candidate_key"] == best_key].iloc[0].to_dict()
+        paths = export_champion_model(
+            estimator=best["estimator"],
+            feature_cols=best["feature_cols"],
+            metrics={k: v for k, v in row.items() if k.startswith("holdout_") or k in ["cv_log_loss", "calibration"]},
+            model_family=best["model_name"],
+            feature_set_name=best["feature_set"],
+            model_dir=settings.model_dir,
+            notes="Champion promoted by CLI trainer. Notebook review is preferred.",
         )
-        conn.commit()
-    print({"run_id": result["run_id"], "model_name": result["model_name"], "metrics": result["final_metrics"], "paths": {k: str(v) for k, v in paths.items()}})
+        print(paths)
 
 
 if __name__ == "__main__":
