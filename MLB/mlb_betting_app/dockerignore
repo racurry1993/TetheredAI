@@ -1,12 +1,15 @@
+cat > .dockerignore <<'EOF'
 .git
-.github
 .venv
 __pycache__
 *.pyc
-.env
 .ipynb_checkpoints
-notebooks/.ipynb_checkpoints
-data/odds.db
-data/*.db
-data/raw
+
+data
+notebooks
+models/archive
 *.zip
+*.db
+*.sqlite
+.env
+EOF
