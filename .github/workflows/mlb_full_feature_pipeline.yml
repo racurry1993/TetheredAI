@@ -3,27 +3,39 @@ name: MLB Full Feature Refresh
 on:
   workflow_dispatch:
     inputs:
+      fetch_odds:
+        description: "Fetch fresh odds?"
+        required: true
+        default: "false"
+        type: choice
+        options: ["false", "true"]
       days_back:
-        description: "Historical days back"
+        description: "Historical days back for games/boxscores/statcast"
         required: true
         default: "730"
       days_forward:
         description: "Upcoming days forward"
         required: true
         default: "14"
-      fetch_odds:
-        description: "Fetch fresh h2h odds during refresh?"
+      statcast_days_back:
+        description: "Statcast days back. Use 14 for testing, 730 for full backfill."
         required: true
-        default: "false"
-        type: choice
-        options: ["true", "false"]
+        default: "14"
+      statcast_chunk_days:
+        description: "Statcast chunk size in days"
+        required: true
+        default: "3"
+      statcast_limit_chunks:
+        description: "Debug only. Blank for all chunks."
+        required: false
+        default: ""
 
 permissions:
   contents: write
   actions: read
 
 concurrency:
-  group: mlb-full-feature-refresh
+  group: mlb-feature-refresh-statcast
   cancel-in-progress: false
 
 jobs:
@@ -38,26 +50,30 @@ jobs:
       ODDS_SPORT_KEY: baseball_mlb
       ODDS_REGIONS: us
       ODDS_FORMAT: american
-
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
       - name: Install dependencies
         run: |
           cd "$APP_DIR"
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
       - name: Initialize database
         run: |
           cd "$APP_DIR"
           python scripts/00_init_db.py
+
       - name: Fetch odds
         if: ${{ inputs.fetch_odds == 'true' }}
         run: |
           cd "$APP_DIR"
           python scripts/01_fetch_odds.py --sport baseball_mlb --regions us --markets h2h
+
       - name: Fetch MLB games
         run: |
           cd "$APP_DIR"
@@ -66,26 +82,59 @@ jobs:
             --days-forward "${{ inputs.days_forward }}" \
             --game-type R \
             --chunk-days 30
+
       - name: Fetch MLB boxscores
         run: |
           cd "$APP_DIR"
           python scripts/07_fetch_mlb_boxscores.py \
             --days-back "${{ inputs.days_back }}" \
             --sleep 0.10
-      - name: Validate feature engineering
+
+      - name: Fetch and aggregate Statcast
         run: |
           cd "$APP_DIR"
-          python scripts/validate_feature_engineering.py
-      - name: Build features
+          if [ -z "${{ inputs.statcast_limit_chunks }}" ]; then
+            python scripts/09_fetch_statcast.py \
+              --days-back "${{ inputs.statcast_days_back }}" \
+              --chunk-days "${{ inputs.statcast_chunk_days }}" \
+              --sleep 0.50
+          else
+            python scripts/09_fetch_statcast.py \
+              --days-back "${{ inputs.statcast_days_back }}" \
+              --chunk-days "${{ inputs.statcast_chunk_days }}" \
+              --limit-chunks "${{ inputs.statcast_limit_chunks }}" \
+              --sleep 0.50
+          fi
+
+      - name: Validate Statcast features
+        run: |
+          cd "$APP_DIR"
+          python scripts/10_validate_statcast_features.py
+
+      - name: Build production features
         run: |
           cd "$APP_DIR"
           python scripts/03_build_features.py
-      - name: Commit refreshed feature outputs
+
+      - name: Inspect feature output
+        run: |
+          cd "$APP_DIR"
+          python - <<'PY'
+          import pandas as pd
+          from pathlib import Path
+          p = Path('data/processed/mlb_game_features.parquet')
+          df = pd.read_parquet(p)
+          sc = [c for c in df.columns if 'statcast' in c.lower() or '_sc_' in c.lower()]
+          print({'rows': len(df), 'cols': len(df.columns), 'statcast_like_cols': len(sc)})
+          print(sc[:100])
+          PY
+
+      - name: Commit updated data/features
         run: |
           cd "$APP_DIR"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -f data/odds.db
           git add -f data/processed
-          git commit -m "Refresh MLB feature data" || echo "No changes to commit"
+          git commit -m "Refresh MLB features with Statcast" || echo "No changes to commit"
           git push
