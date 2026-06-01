@@ -1,99 +1,205 @@
 from __future__ import annotations
 
-"""Validate Statcast feature tables and feature attachment without API calls."""
+"""Lightweight validation for Statcast aggregate tables.
 
-from pathlib import Path
+This script does NOT rebuild the full feature frame. It only validates the
+SQLite tables produced by scripts/09_fetch_statcast.py. That keeps GitHub
+Actions reruns cheap and avoids duplicating the expensive feature build.
+
+The previous validator expected older column names such as game_date,
+fetched_at_utc, and sc_batters_faced. The current Statcast fetcher writes
+official_date, last_updated_utc, sc_pa, and sc_pitches_seen/sc_pitches, so this
+validator uses the actual schema.
+"""
+
+import sqlite3
 import sys
-
-import pandas as pd
+from pathlib import Path
+from typing import Iterable
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from mlb_betting.config import get_settings
 from mlb_betting.db import connect, init_db
-from mlb_betting.feature_engineering import (
-    build_game_feature_frame,
-    load_latest_odds_consensus,
-    load_mlb_games,
-    load_mlb_pitcher_game_stats,
-    load_mlb_team_game_stats,
-    save_features,
-)
-from mlb_betting.statcast_features import add_statcast_features, get_statcast_feature_columns, table_exists
 
 
-def table_count(conn, table: str) -> int:
-    if not table_exists(conn, table):
-        return 0
-    return int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+REQUIRED_TABLES: dict[str, list[str]] = {
+    "mlb_games": [
+        "game_pk", "official_date", "game_datetime_utc", "home_team_id", "away_team_id",
+    ],
+    "mlb_statcast_team_game": [
+        "game_pk", "team_id", "opponent_team_id", "is_home", "official_date", "game_datetime_utc",
+        "sc_pa", "sc_pitches_seen", "sc_bbe", "sc_woba", "sc_xwoba_contact", "sc_avg_ev",
+        "sc_hard_hit_rate", "sc_barrel_rate", "sc_whiff_rate", "sc_csw_rate", "sc_k_rate",
+        "sc_bb_rate", "sc_hr_rate", "last_updated_utc",
+    ],
+    "mlb_statcast_team_hand_game": [
+        "game_pk", "team_id", "opponent_team_id", "is_home", "pitcher_hand", "official_date",
+        "game_datetime_utc", "sc_pa", "sc_pitches_seen", "sc_bbe", "sc_woba",
+        "sc_xwoba_contact", "sc_avg_ev", "sc_hard_hit_rate", "sc_barrel_rate", "sc_whiff_rate",
+        "sc_csw_rate", "sc_k_rate", "sc_bb_rate", "sc_hr_rate", "last_updated_utc",
+    ],
+    "mlb_statcast_pitcher_game": [
+        "game_pk", "pitcher_id", "team_id", "opponent_team_id", "is_home", "pitcher_hand",
+        "is_starter", "official_date", "game_datetime_utc", "sc_pitches", "sc_pa",
+        "sc_bbe_allowed", "sc_release_speed_mean", "sc_release_spin_mean",
+        "sc_release_extension_mean", "sc_pitch_mix_entropy", "sc_whiff_rate", "sc_csw_rate",
+        "sc_xwoba_allowed_contact", "sc_woba_allowed", "sc_hard_hit_rate_allowed",
+        "sc_barrel_rate_allowed", "sc_k_rate", "sc_bb_rate", "sc_hr_rate", "last_updated_utc",
+    ],
+}
+
+PRIMARY_KEY_CHECKS: dict[str, list[str]] = {
+    "mlb_statcast_team_game": ["game_pk", "team_id"],
+    "mlb_statcast_team_hand_game": ["game_pk", "team_id", "pitcher_hand"],
+    "mlb_statcast_pitcher_game": ["game_pk", "pitcher_id", "team_id"],
+}
+
+
+def qident(name: str) -> str:
+    return '"' + name.replace('"', '""') + '"'
+
+
+def table_exists(conn: sqlite3.Connection, table: str) -> bool:
+    row = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+        (table,),
+    ).fetchone()
+    return row is not None
+
+
+def get_columns(conn: sqlite3.Connection, table: str) -> list[str]:
+    return [str(row[1]) for row in conn.execute(f"PRAGMA table_info({qident(table)})").fetchall()]
+
+
+def row_count(conn: sqlite3.Connection, table: str) -> int:
+    return int(conn.execute(f"SELECT COUNT(*) FROM {qident(table)}").fetchone()[0])
+
+
+def date_coverage(conn: sqlite3.Connection, table: str) -> tuple[str | None, str | None, int]:
+    cols = set(get_columns(conn, table))
+    date_col = "official_date" if "official_date" in cols else None
+    if date_col is None:
+        return None, None, 0
+    row = conn.execute(
+        f"SELECT MIN({qident(date_col)}), MAX({qident(date_col)}), COUNT(DISTINCT {qident(date_col)}) FROM {qident(table)}"
+    ).fetchone()
+    return row[0], row[1], int(row[2] or 0)
+
+
+def duplicate_key_count(conn: sqlite3.Connection, table: str, key_cols: Iterable[str]) -> int:
+    cols = list(key_cols)
+    existing = set(get_columns(conn, table))
+    if not all(c in existing for c in cols):
+        return -1
+    group_cols = ", ".join(qident(c) for c in cols)
+    sql = f"""
+        SELECT COUNT(*)
+        FROM (
+            SELECT {group_cols}, COUNT(*) AS n
+            FROM {qident(table)}
+            GROUP BY {group_cols}
+            HAVING COUNT(*) > 1
+        )
+    """
+    return int(conn.execute(sql).fetchone()[0])
+
+
+def sample_null_rate(conn: sqlite3.Connection, table: str, col: str) -> float | None:
+    if col not in get_columns(conn, table):
+        return None
+    n = row_count(conn, table)
+    if n == 0:
+        return None
+    nulls = int(conn.execute(f"SELECT COUNT(*) FROM {qident(table)} WHERE {qident(col)} IS NULL").fetchone()[0])
+    return nulls / n
 
 
 def main() -> None:
     settings = get_settings()
     init_db(settings.odds_db_path)
-    output = settings.data_dir / "processed" / "mlb_game_features_statcast_validation.parquet"
+
+    print("Statcast validation: lightweight SQLite table/schema checks.")
+    print("Database:", settings.odds_db_path)
+
+    failures: list[str] = []
 
     with connect(settings.odds_db_path) as conn:
-        counts = {
-            "mlb_games": table_count(conn, "mlb_games"),
-            "mlb_pitcher_game_stats": table_count(conn, "mlb_pitcher_game_stats"),
-            "mlb_team_game_stats": table_count(conn, "mlb_team_game_stats"),
-            "mlb_statcast_team_game": table_count(conn, "mlb_statcast_team_game"),
-            "mlb_statcast_team_hand_game": table_count(conn, "mlb_statcast_team_hand_game"),
-            "mlb_statcast_pitcher_game": table_count(conn, "mlb_statcast_pitcher_game"),
-        }
-        print("Input table counts:")
-        print(counts)
+        for table, required_cols in REQUIRED_TABLES.items():
+            print("\n" + "=" * 80)
+            print(table)
+            print("=" * 80)
 
-        games = load_mlb_games(conn)
-        odds = load_latest_odds_consensus(conn)
-        pitcher_stats = load_mlb_pitcher_game_stats(conn)
-        team_game_stats = load_mlb_team_game_stats(conn)
-        features = build_game_feature_frame(
-            games,
-            odds_consensus=odds,
-            include_future=True,
-            pitcher_stats=pitcher_stats,
-            team_game_stats=team_game_stats,
-        )
-        before_cols = len(features.columns)
-        features = add_statcast_features(features, conn)
-        statcast_cols = get_statcast_feature_columns(features)
-        after_cols = len(features.columns)
+            if not table_exists(conn, table):
+                failures.append(f"Missing table: {table}")
+                print("exists: False")
+                continue
 
-    save_features(features, output)
+            cols = get_columns(conn, table)
+            n = row_count(conn, table)
+            min_date, max_date, distinct_dates = date_coverage(conn, table)
+            print({
+                "exists": True,
+                "rows": n,
+                "columns": len(cols),
+                "min_official_date": min_date,
+                "max_official_date": max_date,
+                "distinct_dates": distinct_dates,
+            })
 
-    print({
-        "rows": len(features),
-        "columns_before_statcast": before_cols,
-        "columns_after_statcast": after_cols,
-        "statcast_feature_columns": len(statcast_cols),
-        "output": str(output),
-    })
+            missing = [c for c in required_cols if c not in cols]
+            if missing:
+                failures.append(f"{table} missing required columns: {missing}")
+                print({"missing_required_columns": missing})
+            else:
+                print("required columns: OK")
 
-    groups = {
-        "team_offense": [c for c in statcast_cols if "team_off" in c],
-        "team_vs_hand": [c for c in statcast_cols if "team_vs_hand" in c],
-        "starter": [c for c in statcast_cols if "starter_statcast" in c],
-        "bullpen": [c for c in statcast_cols if "bullpen" in c],
-    }
-    for name, cols in groups.items():
-        print(f"{name}: {len(cols)} columns")
-        print(cols[:20])
+            if table != "mlb_games" and n == 0:
+                failures.append(f"{table} has zero rows")
 
-    if statcast_cols:
-        missing = features[statcast_cols].isna().mean().sort_values(ascending=False).head(30)
-        print("Top Statcast missingness:")
-        print(missing.to_string())
+            if table in PRIMARY_KEY_CHECKS:
+                dups = duplicate_key_count(conn, table, PRIMARY_KEY_CHECKS[table])
+                print({"duplicate_primary_keys": dups})
+                if dups > 0:
+                    failures.append(f"{table} has duplicate key rows: {dups}")
 
-    # Leakage sanity: no postgame fields in default statcast cols.
-    banned_tokens = ["post_", "delta_", "home_score", "away_score", "target_home_win", "total_runs", "home_margin"]
-    bad = [c for c in statcast_cols if any(tok in c for tok in banned_tokens)]
-    if bad:
-        raise SystemExit(f"Potential leakage columns found in Statcast feature list: {bad}")
+            for col in ["sc_xwoba_contact", "sc_avg_ev", "sc_woba", "sc_release_speed_mean"]:
+                rate = sample_null_rate(conn, table, col)
+                if rate is not None:
+                    print({f"{col}_null_rate": round(rate, 4)})
 
-    print("Validation completed.")
+        print("\n" + "=" * 80)
+        print("Statcast ↔ mlb_games key coverage")
+        print("=" * 80)
+        if table_exists(conn, "mlb_statcast_team_game") and table_exists(conn, "mlb_games"):
+            row = conn.execute(
+                """
+                SELECT
+                    COUNT(*) AS statcast_team_rows,
+                    SUM(CASE WHEN g.game_pk IS NOT NULL THEN 1 ELSE 0 END) AS rows_matching_mlb_games,
+                    COUNT(DISTINCT s.game_pk) AS statcast_games,
+                    COUNT(DISTINCT g.game_pk) AS matched_games
+                FROM mlb_statcast_team_game s
+                LEFT JOIN mlb_games g ON s.game_pk = g.game_pk
+                """
+            ).fetchone()
+            print({
+                "statcast_team_rows": row[0],
+                "rows_matching_mlb_games": row[1],
+                "statcast_games": row[2],
+                "matched_games": row[3],
+            })
+            if row[0] and row[1] == 0:
+                failures.append("No Statcast team rows match mlb_games.game_pk")
+
+    if failures:
+        print("\nValidation failures:")
+        for f in failures:
+            print("-", f)
+        raise SystemExit(1)
+
+    print("\nStatcast validation completed successfully.")
 
 
 if __name__ == "__main__":

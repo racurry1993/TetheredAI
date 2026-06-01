@@ -164,6 +164,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--limit-chunks", type=int, default=None, help="Debug option to limit API calls.")
     parser.add_argument("--sleep", type=float, default=0.5, help="Pause between chunks.")
     parser.add_argument("--parallel", action="store_true", help="Pass parallel=True to pybaseball.statcast.")
+    parser.add_argument(
+        "--skip-existing",
+        action="store_true",
+        help=(
+            "Skip a Statcast chunk when mlb_statcast_team_game already has rows "
+            "for every official_date in that chunk. Useful when rerunning failed workflows."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -178,6 +186,36 @@ def date_chunks(start: date, end: date, chunk_days: int) -> Iterable[tuple[date,
         chunk_end = min(end, cur + timedelta(days=chunk_days - 1))
         yield cur, chunk_end
         cur = chunk_end + timedelta(days=1)
+
+
+def chunk_has_existing_statcast(conn: sqlite3.Connection, chunk_start: date, chunk_end: date) -> bool:
+    """Return True when a chunk appears already loaded in mlb_statcast_team_game.
+
+    This is intentionally conservative: it requires at least one row for every
+    date in the chunk. The underlying Statcast table is keyed by game/team, so
+    reruns are safe even when we do fetch a partially loaded chunk.
+    """
+    expected_dates = {
+        (chunk_start + timedelta(days=i)).strftime("%Y-%m-%d")
+        for i in range((chunk_end - chunk_start).days + 1)
+    }
+    if not expected_dates:
+        return False
+
+    try:
+        rows = conn.execute(
+            """
+            SELECT DISTINCT official_date
+            FROM mlb_statcast_team_game
+            WHERE official_date >= ? AND official_date <= ?
+            """,
+            (chunk_start.strftime("%Y-%m-%d"), chunk_end.strftime("%Y-%m-%d")),
+        ).fetchall()
+    except sqlite3.Error:
+        return False
+
+    loaded_dates = {str(row[0]) for row in rows if row[0] is not None}
+    return expected_dates.issubset(loaded_dates)
 
 
 def load_games(conn: sqlite3.Connection) -> pd.DataFrame:
@@ -500,7 +538,14 @@ def main() -> None:
         if args.limit_chunks is not None:
             chunks = chunks[: args.limit_chunks]
 
+        skipped_chunks = 0
+
         for i, (chunk_start, chunk_end) in enumerate(chunks, start=1):
+            if args.skip_existing and chunk_has_existing_statcast(conn, chunk_start, chunk_end):
+                skipped_chunks += 1
+                print(f"Skipping Statcast chunk {i}/{len(chunks)} already loaded: {chunk_start} to {chunk_end}")
+                continue
+
             print(f"Fetching Statcast chunk {i}/{len(chunks)}: {chunk_start} to {chunk_end}")
             raw = fetch_statcast_chunk(chunk_start, chunk_end, parallel=args.parallel)
             if raw is None or raw.empty:
@@ -529,6 +574,7 @@ def main() -> None:
             "team_rows_upserted": total_team,
             "team_hand_rows_upserted": total_hand,
             "pitcher_rows_upserted": total_pitcher,
+            "chunks_skipped_existing": skipped_chunks,
         })
 
 
