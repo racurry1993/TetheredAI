@@ -1,0 +1,15 @@
+cat > .gcloudignore <<'EOF'
+.git/
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+data/
+models/archive/
+notebooks/
+*.zip
+*.db
+*.sqlite
+.env
+EOF
