@@ -263,6 +263,32 @@ def prepare_statcast(raw: pd.DataFrame, games: pd.DataFrame, starters: pd.DataFr
     return df
 
 
+
+
+def _safe_float(value) -> float:
+    """Convert numeric scalars to float while tolerating np.nan/pd.NA/None."""
+    try:
+        if pd.isna(value):
+            return np.nan
+        return float(value)
+    except Exception:
+        return np.nan
+
+
+def _numeric_series(frame: pd.DataFrame, col: str) -> pd.Series:
+    """Return a numeric Series for col, or an empty numeric Series if missing."""
+    if col not in frame.columns:
+        return pd.Series(dtype=float)
+    return pd.to_numeric(frame[col], errors="coerce")
+
+
+def _mean(frame: pd.DataFrame, col: str) -> float:
+    return _safe_float(_numeric_series(frame, col).mean(skipna=True))
+
+
+def _max(frame: pd.DataFrame, col: str) -> float:
+    return _safe_float(_numeric_series(frame, col).max(skipna=True))
+
 def _rate(num: float, den: float) -> float:
     try:
         if den and den > 0:
@@ -305,10 +331,10 @@ def aggregate_team_game(df: pd.DataFrame, fetched_at: str) -> pd.DataFrame:
             "sc_pitches_seen": int(g.shape[0]),
             "sc_bbe": int(bbe.shape[0]),
             "sc_woba": _rate(pa.get("woba_value", pd.Series(dtype=float)).sum(skipna=True), pa.get("woba_denom", pd.Series(dtype=float)).sum(skipna=True)),
-            "sc_xwoba_contact": float(bbe.get("estimated_woba_using_speedangle", pd.Series(dtype=float)).mean()) if not bbe.empty else np.nan,
-            "sc_avg_ev": float(bbe.get("launch_speed", pd.Series(dtype=float)).mean()) if not bbe.empty else np.nan,
-            "sc_max_ev": float(bbe.get("launch_speed", pd.Series(dtype=float)).max()) if not bbe.empty else np.nan,
-            "sc_avg_la": float(bbe.get("launch_angle", pd.Series(dtype=float)).mean()) if not bbe.empty else np.nan,
+            "sc_xwoba_contact": _mean(bbe, "estimated_woba_using_speedangle") if not bbe.empty else np.nan,
+            "sc_avg_ev": _mean(bbe, "launch_speed") if not bbe.empty else np.nan,
+            "sc_max_ev": _max(bbe, "launch_speed") if not bbe.empty else np.nan,
+            "sc_avg_la": _mean(bbe, "launch_angle") if not bbe.empty else np.nan,
             "sc_hard_hit_rate": _rate(g["is_hard_hit"].sum(), bbe.shape[0]),
             "sc_barrel_rate": _rate(g["is_barrel"].sum(), bbe.shape[0]),
             "sc_sweetspot_rate": _rate(g["is_sweetspot"].sum(), bbe.shape[0]),
@@ -342,10 +368,10 @@ def aggregate_team_hand_game(df: pd.DataFrame, fetched_at: str) -> pd.DataFrame:
             "sc_pitches_seen": int(g.shape[0]),
             "sc_bbe": int(bbe.shape[0]),
             "sc_woba": _rate(pa.get("woba_value", pd.Series(dtype=float)).sum(skipna=True), pa.get("woba_denom", pd.Series(dtype=float)).sum(skipna=True)),
-            "sc_xwoba_contact": float(bbe.get("estimated_woba_using_speedangle", pd.Series(dtype=float)).mean()) if not bbe.empty else np.nan,
-            "sc_avg_ev": float(bbe.get("launch_speed", pd.Series(dtype=float)).mean()) if not bbe.empty else np.nan,
-            "sc_max_ev": float(bbe.get("launch_speed", pd.Series(dtype=float)).max()) if not bbe.empty else np.nan,
-            "sc_avg_la": float(bbe.get("launch_angle", pd.Series(dtype=float)).mean()) if not bbe.empty else np.nan,
+            "sc_xwoba_contact": _mean(bbe, "estimated_woba_using_speedangle") if not bbe.empty else np.nan,
+            "sc_avg_ev": _mean(bbe, "launch_speed") if not bbe.empty else np.nan,
+            "sc_max_ev": _max(bbe, "launch_speed") if not bbe.empty else np.nan,
+            "sc_avg_la": _mean(bbe, "launch_angle") if not bbe.empty else np.nan,
             "sc_hard_hit_rate": _rate(g["is_hard_hit"].sum(), bbe.shape[0]),
             "sc_barrel_rate": _rate(g["is_barrel"].sum(), bbe.shape[0]),
             "sc_sweetspot_rate": _rate(g["is_sweetspot"].sum(), bbe.shape[0]),
@@ -382,10 +408,10 @@ def aggregate_pitcher_game(df: pd.DataFrame, fetched_at: str) -> pd.DataFrame:
             "sc_pitches": int(g.shape[0]),
             "sc_pa": int(pa.shape[0]),
             "sc_bbe_allowed": int(bbe.shape[0]),
-            "sc_release_speed_mean": float(g.get("release_speed", pd.Series(dtype=float)).mean()),
-            "sc_release_speed_max": float(g.get("release_speed", pd.Series(dtype=float)).max()),
-            "sc_release_spin_mean": float(g.get("release_spin_rate", pd.Series(dtype=float)).mean()),
-            "sc_release_extension_mean": float(g.get("release_extension", pd.Series(dtype=float)).mean()),
+            "sc_release_speed_mean": _mean(g, "release_speed"),
+            "sc_release_speed_max": _max(g, "release_speed"),
+            "sc_release_spin_mean": _mean(g, "release_spin_rate"),
+            "sc_release_extension_mean": _mean(g, "release_extension"),
             "sc_pitch_mix_entropy": _entropy(pitch_type),
             "sc_fastball_pct": _pitch_mix_pct(pitch_type, FASTBALL_TYPES),
             "sc_breaking_pct": _pitch_mix_pct(pitch_type, BREAKING_TYPES),
@@ -394,11 +420,11 @@ def aggregate_pitcher_game(df: pd.DataFrame, fetched_at: str) -> pd.DataFrame:
             "sc_whiff_rate": _rate(g["is_whiff"].sum(), g["is_swing"].sum()),
             "sc_csw_rate": _rate(g["is_csw"].sum(), g.shape[0]),
             "sc_called_strike_rate": _rate(g["is_called_strike"].sum(), g.shape[0]),
-            "sc_xwoba_allowed_contact": float(bbe.get("estimated_woba_using_speedangle", pd.Series(dtype=float)).mean()) if not bbe.empty else np.nan,
+            "sc_xwoba_allowed_contact": _mean(bbe, "estimated_woba_using_speedangle") if not bbe.empty else np.nan,
             "sc_woba_allowed": _rate(pa.get("woba_value", pd.Series(dtype=float)).sum(skipna=True), pa.get("woba_denom", pd.Series(dtype=float)).sum(skipna=True)),
-            "sc_avg_ev_allowed": float(bbe.get("launch_speed", pd.Series(dtype=float)).mean()) if not bbe.empty else np.nan,
-            "sc_max_ev_allowed": float(bbe.get("launch_speed", pd.Series(dtype=float)).max()) if not bbe.empty else np.nan,
-            "sc_avg_la_allowed": float(bbe.get("launch_angle", pd.Series(dtype=float)).mean()) if not bbe.empty else np.nan,
+            "sc_avg_ev_allowed": _mean(bbe, "launch_speed") if not bbe.empty else np.nan,
+            "sc_max_ev_allowed": _max(bbe, "launch_speed") if not bbe.empty else np.nan,
+            "sc_avg_la_allowed": _mean(bbe, "launch_angle") if not bbe.empty else np.nan,
             "sc_hard_hit_rate_allowed": _rate(g["is_hard_hit"].sum(), bbe.shape[0]),
             "sc_barrel_rate_allowed": _rate(g["is_barrel"].sum(), bbe.shape[0]),
             "sc_sweetspot_rate_allowed": _rate(g["is_sweetspot"].sum(), bbe.shape[0]),
@@ -431,7 +457,7 @@ def upsert_df(conn: sqlite3.Connection, table: str, df: pd.DataFrame) -> int:
         INSERT INTO {table} ({col_sql}) VALUES ({placeholders})
         ON CONFLICT({conflict}) DO UPDATE SET {update_sql}
     """
-    records = df.replace({np.nan: None}).to_dict("records")
+    records = df.replace({pd.NA: np.nan}).where(pd.notna(df), None).to_dict("records")
     conn.executemany(sql, records)
     return len(records)
 
