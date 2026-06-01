@@ -41,6 +41,11 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
+
+    # GitHub-hosted runners have a maximum job timeout of 360 minutes.
+    # Keep this slightly below the max so failures are explicit and easy to identify.
+    timeout-minutes: 350
+
     env:
       APP_DIR: MLB/mlb_betting_app
       ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
@@ -50,31 +55,40 @@ jobs:
       ODDS_SPORT_KEY: baseball_mlb
       ODDS_REGIONS: us
       ODDS_FORMAT: american
-    steps:
-      - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        timeout-minutes: 5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        timeout-minutes: 10
         with:
           python-version: "3.11"
 
       - name: Install dependencies
+        timeout-minutes: 30
         run: |
           cd "$APP_DIR"
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Initialize database
+        timeout-minutes: 5
         run: |
           cd "$APP_DIR"
           python scripts/00_init_db.py
 
       - name: Fetch odds
         if: ${{ inputs.fetch_odds == 'true' }}
+        timeout-minutes: 10
         run: |
           cd "$APP_DIR"
           python scripts/01_fetch_odds.py --sport baseball_mlb --regions us --markets h2h
 
       - name: Fetch MLB games
+        timeout-minutes: 30
         run: |
           cd "$APP_DIR"
           python scripts/02_fetch_mlb_games.py \
@@ -84,6 +98,7 @@ jobs:
             --chunk-days 30
 
       - name: Fetch MLB boxscores
+        timeout-minutes: 180
         run: |
           cd "$APP_DIR"
           python scripts/07_fetch_mlb_boxscores.py \
@@ -91,6 +106,9 @@ jobs:
             --sleep 0.10
 
       - name: Fetch and aggregate Statcast
+        # This is the expensive step. If it times out, rerun with a smaller
+        # statcast_days_back or use statcast_limit_chunks to backfill gradually.
+        timeout-minutes: 300
         run: |
           cd "$APP_DIR"
           if [ -z "${{ inputs.statcast_limit_chunks }}" ]; then
@@ -107,16 +125,19 @@ jobs:
           fi
 
       - name: Validate Statcast features
+        timeout-minutes: 30
         run: |
           cd "$APP_DIR"
           python scripts/10_validate_statcast_features.py
 
       - name: Build production features
+        timeout-minutes: 45
         run: |
           cd "$APP_DIR"
           python scripts/03_build_features.py
 
       - name: Inspect feature output
+        timeout-minutes: 10
         run: |
           cd "$APP_DIR"
           python - <<'PY'
@@ -130,6 +151,7 @@ jobs:
           PY
 
       - name: Commit updated data/features
+        timeout-minutes: 20
         run: |
           cd "$APP_DIR"
           git config user.name "github-actions[bot]"
