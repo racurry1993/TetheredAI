@@ -10,17 +10,29 @@ on:
         type: choice
         options: ["false", "true"]
       days_back:
-        description: "Historical days back for games/boxscores/statcast"
+        description: "Historical days back for games/boxscores"
         required: true
         default: "730"
       days_forward:
         description: "Upcoming days forward"
         required: true
         default: "14"
+      refresh_statcast:
+        description: "Fetch/aggregate Statcast again? Set false to reuse committed odds.db Statcast tables."
+        required: true
+        default: "false"
+        type: choice
+        options: ["false", "true"]
+      skip_existing_statcast:
+        description: "When refreshing Statcast, skip date chunks already present in odds.db?"
+        required: true
+        default: "true"
+        type: choice
+        options: ["true", "false"]
       statcast_days_back:
         description: "Statcast days back. Use 14 for testing, 730 for full backfill."
         required: true
-        default: "14"
+        default: "730"
       statcast_chunk_days:
         description: "Statcast chunk size in days"
         required: true
@@ -41,9 +53,6 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-
-    # GitHub-hosted runners have a maximum job timeout of 360 minutes.
-    # Keep this slightly below the max so failures are explicit and easy to identify.
     timeout-minutes: 350
 
     env:
@@ -106,38 +115,79 @@ jobs:
             --sleep 0.10
 
       - name: Fetch and aggregate Statcast
-        # This is the expensive step. If it times out, rerun with a smaller
-        # statcast_days_back or use statcast_limit_chunks to backfill gradually.
+        if: ${{ inputs.refresh_statcast == 'true' }}
         timeout-minutes: 300
         run: |
           cd "$APP_DIR"
-          if [ -z "${{ inputs.statcast_limit_chunks }}" ]; then
-            python scripts/09_fetch_statcast.py \
-              --days-back "${{ inputs.statcast_days_back }}" \
-              --chunk-days "${{ inputs.statcast_chunk_days }}" \
-              --sleep 0.50
-          else
-            python scripts/09_fetch_statcast.py \
-              --days-back "${{ inputs.statcast_days_back }}" \
-              --chunk-days "${{ inputs.statcast_chunk_days }}" \
-              --limit-chunks "${{ inputs.statcast_limit_chunks }}" \
-              --sleep 0.50
+
+          SKIP_EXISTING_ARG=""
+          if [ "${{ inputs.skip_existing_statcast }}" = "true" ]; then
+            SKIP_EXISTING_ARG="--skip-existing"
           fi
 
-      - name: Validate Statcast features
-        timeout-minutes: 30
+          LIMIT_ARG=""
+          if [ -n "${{ inputs.statcast_limit_chunks }}" ]; then
+            LIMIT_ARG="--limit-chunks ${{ inputs.statcast_limit_chunks }}"
+          fi
+
+          python scripts/09_fetch_statcast.py \
+            --days-back "${{ inputs.statcast_days_back }}" \
+            --chunk-days "${{ inputs.statcast_chunk_days }}" \
+            $LIMIT_ARG \
+            $SKIP_EXISTING_ARG \
+            --sleep 0.50
+
+      - name: Skip Statcast fetch
+        if: ${{ inputs.refresh_statcast != 'true' }}
+        run: |
+          echo "Skipping Statcast fetch/aggregate. Using existing Statcast tables in data/odds.db."
+
+      - name: Inspect Statcast tables after fetch/skip
+        timeout-minutes: 5
+        run: |
+          cd "$APP_DIR"
+          python - <<'PY'
+          import sqlite3
+          from pathlib import Path
+          db = Path('data/odds.db')
+          print({'db_exists': db.exists(), 'db_size_mb': round(db.stat().st_size / 1024 / 1024, 2) if db.exists() else None})
+          with sqlite3.connect(db) as conn:
+              for table in ['mlb_statcast_team_game', 'mlb_statcast_team_hand_game', 'mlb_statcast_pitcher_game']:
+                  exists = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone() is not None
+                  if not exists:
+                      print({table: 'missing'})
+                      continue
+                  row = conn.execute(f"SELECT COUNT(*), MIN(official_date), MAX(official_date), COUNT(DISTINCT official_date) FROM {table}").fetchone()
+                  print({table: {'rows': row[0], 'min_date': row[1], 'max_date': row[2], 'distinct_dates': row[3]}})
+          PY
+
+      - name: Upload odds.db checkpoint after Statcast step
+        uses: actions/upload-artifact@v4
+        timeout-minutes: 10
+        with:
+          name: odds-db-after-statcast-step
+          retention-days: 3
+          path: ${{ env.APP_DIR }}/data/odds.db
+
+      - name: Commit odds.db checkpoint after Statcast step
+        if: ${{ inputs.refresh_statcast == 'true' }}
+        timeout-minutes: 20
+        run: |
+          cd "$APP_DIR"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f data/odds.db
+          git commit -m "Checkpoint MLB Statcast aggregates" || echo "No Statcast checkpoint changes to commit"
+          git push
+
+      - name: Validate Statcast tables
+        timeout-minutes: 10
         run: |
           cd "$APP_DIR"
           python scripts/10_validate_statcast_features.py
 
       - name: Build production features
-        timeout-minutes: 45
-        run: |
-          cd "$APP_DIR"
-          python scripts/03_build_features.py
-
-      - name: Build production features
-        timeout-minutes: 45
+        timeout-minutes: 60
         run: |
           cd "$APP_DIR"
           python scripts/03_build_features.py
@@ -164,5 +214,5 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -f data/odds.db
           git add -f data/processed
-          git commit -m "Refresh MLB features with Statcast" || echo "No changes to commit"
+          git commit -m "Refresh MLB features with Statcast" || echo "No feature refresh changes to commit"
           git push
