@@ -136,6 +136,12 @@ jobs:
           cd "$APP_DIR"
           python scripts/03_build_features.py
 
+      - name: Build production features
+        timeout-minutes: 45
+        run: |
+          cd "$APP_DIR"
+          python scripts/03_build_features.py
+
       - name: Inspect feature output
         timeout-minutes: 10
         run: |
