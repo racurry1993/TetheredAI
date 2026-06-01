@@ -15,3 +15,4 @@ pillow>=10.0
 xgboost>=2.1.0
 lightgbm>=4.3.0
 pybaseball>=2.2.7
+google-cloud-storage>=2.16.0

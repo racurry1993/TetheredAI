@@ -1,0 +1,12 @@
+.git
+.github
+.venv
+__pycache__
+*.pyc
+.env
+.ipynb_checkpoints
+notebooks/.ipynb_checkpoints
+data/odds.db
+data/*.db
+data/raw
+*.zip
