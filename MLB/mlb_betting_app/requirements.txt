@@ -14,3 +14,4 @@ streamlit>=1.35
 pillow>=10.0
 xgboost>=2.1.0
 lightgbm>=4.3.0
+pybaseball>=2.2.7
