@@ -47,6 +47,15 @@ CREATE TABLE IF NOT EXISTS mlb_statcast_team_game (
     sc_avg_ev REAL,
     sc_max_ev REAL,
     sc_avg_la REAL,
+    sc_avg_batted_ball_ev REAL,
+    sc_median_batted_ball_ev REAL,
+    sc_p90_batted_ball_ev REAL,
+    sc_max_batted_ball_ev REAL,
+    sc_avg_batted_ball_distance REAL,
+    sc_median_batted_ball_distance REAL,
+    sc_p90_batted_ball_distance REAL,
+    sc_max_batted_ball_distance REAL,
+    sc_batted_ball_distance_count INTEGER,
     sc_hard_hit_rate REAL,
     sc_barrel_rate REAL,
     sc_sweetspot_rate REAL,
@@ -78,6 +87,15 @@ CREATE TABLE IF NOT EXISTS mlb_statcast_team_hand_game (
     sc_avg_ev REAL,
     sc_max_ev REAL,
     sc_avg_la REAL,
+    sc_avg_batted_ball_ev REAL,
+    sc_median_batted_ball_ev REAL,
+    sc_p90_batted_ball_ev REAL,
+    sc_max_batted_ball_ev REAL,
+    sc_avg_batted_ball_distance REAL,
+    sc_median_batted_ball_distance REAL,
+    sc_p90_batted_ball_distance REAL,
+    sc_max_batted_ball_distance REAL,
+    sc_batted_ball_distance_count INTEGER,
     sc_hard_hit_rate REAL,
     sc_barrel_rate REAL,
     sc_sweetspot_rate REAL,
@@ -124,6 +142,15 @@ CREATE TABLE IF NOT EXISTS mlb_statcast_pitcher_game (
     sc_avg_ev_allowed REAL,
     sc_max_ev_allowed REAL,
     sc_avg_la_allowed REAL,
+    sc_avg_batted_ball_ev_allowed REAL,
+    sc_median_batted_ball_ev_allowed REAL,
+    sc_p90_batted_ball_ev_allowed REAL,
+    sc_max_batted_ball_ev_allowed REAL,
+    sc_avg_batted_ball_distance_allowed REAL,
+    sc_median_batted_ball_distance_allowed REAL,
+    sc_p90_batted_ball_distance_allowed REAL,
+    sc_max_batted_ball_distance_allowed REAL,
+    sc_batted_ball_distance_allowed_count INTEGER,
     sc_hard_hit_rate_allowed REAL,
     sc_barrel_rate_allowed REAL,
     sc_sweetspot_rate_allowed REAL,
@@ -175,8 +202,51 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _qident(name: str) -> str:
+    return '"' + name.replace('"', '""') + '"'
+
+
+def _existing_columns(conn: sqlite3.Connection, table: str) -> set[str]:
+    return {str(row[1]) for row in conn.execute(f"PRAGMA table_info({_qident(table)})").fetchall()}
+
+
+def _ensure_columns(conn: sqlite3.Connection, table: str, columns: Mapping[str, str]) -> None:
+    existing = _existing_columns(conn, table)
+    for col, col_type in columns.items():
+        if col not in existing:
+            conn.execute(f"ALTER TABLE {_qident(table)} ADD COLUMN {_qident(col)} {col_type}")
+
+
 def init_statcast_tables(conn: sqlite3.Connection) -> None:
     conn.executescript(STATCAST_SCHEMA_SQL)
+
+    # CREATE TABLE IF NOT EXISTS will not add new columns to an existing odds.db.
+    # These ALTERs make the batted-ball distance/velocity upgrade backward compatible.
+    team_new_cols = {
+        "sc_avg_batted_ball_ev": "REAL",
+        "sc_median_batted_ball_ev": "REAL",
+        "sc_p90_batted_ball_ev": "REAL",
+        "sc_max_batted_ball_ev": "REAL",
+        "sc_avg_batted_ball_distance": "REAL",
+        "sc_median_batted_ball_distance": "REAL",
+        "sc_p90_batted_ball_distance": "REAL",
+        "sc_max_batted_ball_distance": "REAL",
+        "sc_batted_ball_distance_count": "INTEGER",
+    }
+    pitcher_new_cols = {
+        "sc_avg_batted_ball_ev_allowed": "REAL",
+        "sc_median_batted_ball_ev_allowed": "REAL",
+        "sc_p90_batted_ball_ev_allowed": "REAL",
+        "sc_max_batted_ball_ev_allowed": "REAL",
+        "sc_avg_batted_ball_distance_allowed": "REAL",
+        "sc_median_batted_ball_distance_allowed": "REAL",
+        "sc_p90_batted_ball_distance_allowed": "REAL",
+        "sc_max_batted_ball_distance_allowed": "REAL",
+        "sc_batted_ball_distance_allowed_count": "INTEGER",
+    }
+    _ensure_columns(conn, "mlb_statcast_team_game", team_new_cols)
+    _ensure_columns(conn, "mlb_statcast_team_hand_game", team_new_cols)
+    _ensure_columns(conn, "mlb_statcast_pitcher_game", pitcher_new_cols)
     conn.commit()
 
 
@@ -267,7 +337,7 @@ def prepare_statcast(raw: pd.DataFrame, games: pd.DataFrame, starters: pd.DataFr
     # Normalize important fields.
     for col in [
         "pitcher", "batter", "release_speed", "release_spin_rate", "release_extension", "launch_speed",
-        "launch_angle", "estimated_woba_using_speedangle", "woba_value", "woba_denom", "zone", "launch_speed_angle",
+        "launch_angle", "hit_distance_sc", "hit_distance", "estimated_woba_using_speedangle", "woba_value", "woba_denom", "zone", "launch_speed_angle",
     ]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
@@ -327,6 +397,51 @@ def _mean(frame: pd.DataFrame, col: str) -> float:
 def _max(frame: pd.DataFrame, col: str) -> float:
     return _safe_float(_numeric_series(frame, col).max(skipna=True))
 
+
+def _median(frame: pd.DataFrame, col: str) -> float:
+    return _safe_float(_numeric_series(frame, col).median(skipna=True))
+
+
+def _quantile(frame: pd.DataFrame, col: str, q: float) -> float:
+    s = _numeric_series(frame, col).dropna()
+    if s.empty:
+        return np.nan
+    return _safe_float(s.quantile(q))
+
+
+def _first_present_col(frame: pd.DataFrame, candidates: list[str]) -> str | None:
+    for col in candidates:
+        if col in frame.columns:
+            return col
+    return None
+
+
+def _mean_any(frame: pd.DataFrame, candidates: list[str]) -> float:
+    col = _first_present_col(frame, candidates)
+    return _mean(frame, col) if col else np.nan
+
+
+def _median_any(frame: pd.DataFrame, candidates: list[str]) -> float:
+    col = _first_present_col(frame, candidates)
+    return _median(frame, col) if col else np.nan
+
+
+def _quantile_any(frame: pd.DataFrame, candidates: list[str], q: float) -> float:
+    col = _first_present_col(frame, candidates)
+    return _quantile(frame, col, q) if col else np.nan
+
+
+def _max_any(frame: pd.DataFrame, candidates: list[str]) -> float:
+    col = _first_present_col(frame, candidates)
+    return _max(frame, col) if col else np.nan
+
+
+def _nonnull_count_any(frame: pd.DataFrame, candidates: list[str]) -> int:
+    col = _first_present_col(frame, candidates)
+    if not col:
+        return 0
+    return int(_numeric_series(frame, col).notna().sum())
+
 def _rate(num: float, den: float) -> float:
     try:
         if den and den > 0:
@@ -373,6 +488,15 @@ def aggregate_team_game(df: pd.DataFrame, fetched_at: str) -> pd.DataFrame:
             "sc_avg_ev": _mean(bbe, "launch_speed") if not bbe.empty else np.nan,
             "sc_max_ev": _max(bbe, "launch_speed") if not bbe.empty else np.nan,
             "sc_avg_la": _mean(bbe, "launch_angle") if not bbe.empty else np.nan,
+            "sc_avg_batted_ball_ev": _mean(bbe, "launch_speed") if not bbe.empty else np.nan,
+            "sc_median_batted_ball_ev": _median(bbe, "launch_speed") if not bbe.empty else np.nan,
+            "sc_p90_batted_ball_ev": _quantile(bbe, "launch_speed", 0.90) if not bbe.empty else np.nan,
+            "sc_max_batted_ball_ev": _max(bbe, "launch_speed") if not bbe.empty else np.nan,
+            "sc_avg_batted_ball_distance": _mean_any(bbe, ["hit_distance_sc", "hit_distance"]) if not bbe.empty else np.nan,
+            "sc_median_batted_ball_distance": _median_any(bbe, ["hit_distance_sc", "hit_distance"]) if not bbe.empty else np.nan,
+            "sc_p90_batted_ball_distance": _quantile_any(bbe, ["hit_distance_sc", "hit_distance"], 0.90) if not bbe.empty else np.nan,
+            "sc_max_batted_ball_distance": _max_any(bbe, ["hit_distance_sc", "hit_distance"]) if not bbe.empty else np.nan,
+            "sc_batted_ball_distance_count": _nonnull_count_any(bbe, ["hit_distance_sc", "hit_distance"]) if not bbe.empty else 0,
             "sc_hard_hit_rate": _rate(g["is_hard_hit"].sum(), bbe.shape[0]),
             "sc_barrel_rate": _rate(g["is_barrel"].sum(), bbe.shape[0]),
             "sc_sweetspot_rate": _rate(g["is_sweetspot"].sum(), bbe.shape[0]),
@@ -410,6 +534,15 @@ def aggregate_team_hand_game(df: pd.DataFrame, fetched_at: str) -> pd.DataFrame:
             "sc_avg_ev": _mean(bbe, "launch_speed") if not bbe.empty else np.nan,
             "sc_max_ev": _max(bbe, "launch_speed") if not bbe.empty else np.nan,
             "sc_avg_la": _mean(bbe, "launch_angle") if not bbe.empty else np.nan,
+            "sc_avg_batted_ball_ev": _mean(bbe, "launch_speed") if not bbe.empty else np.nan,
+            "sc_median_batted_ball_ev": _median(bbe, "launch_speed") if not bbe.empty else np.nan,
+            "sc_p90_batted_ball_ev": _quantile(bbe, "launch_speed", 0.90) if not bbe.empty else np.nan,
+            "sc_max_batted_ball_ev": _max(bbe, "launch_speed") if not bbe.empty else np.nan,
+            "sc_avg_batted_ball_distance": _mean_any(bbe, ["hit_distance_sc", "hit_distance"]) if not bbe.empty else np.nan,
+            "sc_median_batted_ball_distance": _median_any(bbe, ["hit_distance_sc", "hit_distance"]) if not bbe.empty else np.nan,
+            "sc_p90_batted_ball_distance": _quantile_any(bbe, ["hit_distance_sc", "hit_distance"], 0.90) if not bbe.empty else np.nan,
+            "sc_max_batted_ball_distance": _max_any(bbe, ["hit_distance_sc", "hit_distance"]) if not bbe.empty else np.nan,
+            "sc_batted_ball_distance_count": _nonnull_count_any(bbe, ["hit_distance_sc", "hit_distance"]) if not bbe.empty else 0,
             "sc_hard_hit_rate": _rate(g["is_hard_hit"].sum(), bbe.shape[0]),
             "sc_barrel_rate": _rate(g["is_barrel"].sum(), bbe.shape[0]),
             "sc_sweetspot_rate": _rate(g["is_sweetspot"].sum(), bbe.shape[0]),
@@ -463,6 +596,15 @@ def aggregate_pitcher_game(df: pd.DataFrame, fetched_at: str) -> pd.DataFrame:
             "sc_avg_ev_allowed": _mean(bbe, "launch_speed") if not bbe.empty else np.nan,
             "sc_max_ev_allowed": _max(bbe, "launch_speed") if not bbe.empty else np.nan,
             "sc_avg_la_allowed": _mean(bbe, "launch_angle") if not bbe.empty else np.nan,
+            "sc_avg_batted_ball_ev_allowed": _mean(bbe, "launch_speed") if not bbe.empty else np.nan,
+            "sc_median_batted_ball_ev_allowed": _median(bbe, "launch_speed") if not bbe.empty else np.nan,
+            "sc_p90_batted_ball_ev_allowed": _quantile(bbe, "launch_speed", 0.90) if not bbe.empty else np.nan,
+            "sc_max_batted_ball_ev_allowed": _max(bbe, "launch_speed") if not bbe.empty else np.nan,
+            "sc_avg_batted_ball_distance_allowed": _mean_any(bbe, ["hit_distance_sc", "hit_distance"]) if not bbe.empty else np.nan,
+            "sc_median_batted_ball_distance_allowed": _median_any(bbe, ["hit_distance_sc", "hit_distance"]) if not bbe.empty else np.nan,
+            "sc_p90_batted_ball_distance_allowed": _quantile_any(bbe, ["hit_distance_sc", "hit_distance"], 0.90) if not bbe.empty else np.nan,
+            "sc_max_batted_ball_distance_allowed": _max_any(bbe, ["hit_distance_sc", "hit_distance"]) if not bbe.empty else np.nan,
+            "sc_batted_ball_distance_allowed_count": _nonnull_count_any(bbe, ["hit_distance_sc", "hit_distance"]) if not bbe.empty else 0,
             "sc_hard_hit_rate_allowed": _rate(g["is_hard_hit"].sum(), bbe.shape[0]),
             "sc_barrel_rate_allowed": _rate(g["is_barrel"].sum(), bbe.shape[0]),
             "sc_sweetspot_rate_allowed": _rate(g["is_sweetspot"].sum(), bbe.shape[0]),

@@ -31,13 +31,18 @@ REQUIRED_TABLES: dict[str, list[str]] = {
     "mlb_statcast_team_game": [
         "game_pk", "team_id", "opponent_team_id", "is_home", "official_date", "game_datetime_utc",
         "sc_pa", "sc_pitches_seen", "sc_bbe", "sc_woba", "sc_xwoba_contact", "sc_avg_ev",
+        "sc_avg_batted_ball_ev", "sc_p90_batted_ball_ev",
+        "sc_avg_batted_ball_distance", "sc_p90_batted_ball_distance",
         "sc_hard_hit_rate", "sc_barrel_rate", "sc_whiff_rate", "sc_csw_rate", "sc_k_rate",
         "sc_bb_rate", "sc_hr_rate", "last_updated_utc",
     ],
     "mlb_statcast_team_hand_game": [
         "game_pk", "team_id", "opponent_team_id", "is_home", "pitcher_hand", "official_date",
         "game_datetime_utc", "sc_pa", "sc_pitches_seen", "sc_bbe", "sc_woba",
-        "sc_xwoba_contact", "sc_avg_ev", "sc_hard_hit_rate", "sc_barrel_rate", "sc_whiff_rate",
+        "sc_xwoba_contact", "sc_avg_ev",
+        "sc_avg_batted_ball_ev", "sc_p90_batted_ball_ev",
+        "sc_avg_batted_ball_distance", "sc_p90_batted_ball_distance",
+        "sc_hard_hit_rate", "sc_barrel_rate", "sc_whiff_rate",
         "sc_csw_rate", "sc_k_rate", "sc_bb_rate", "sc_hr_rate", "last_updated_utc",
     ],
     "mlb_statcast_pitcher_game": [
@@ -45,7 +50,10 @@ REQUIRED_TABLES: dict[str, list[str]] = {
         "is_starter", "official_date", "game_datetime_utc", "sc_pitches", "sc_pa",
         "sc_bbe_allowed", "sc_release_speed_mean", "sc_release_spin_mean",
         "sc_release_extension_mean", "sc_pitch_mix_entropy", "sc_whiff_rate", "sc_csw_rate",
-        "sc_xwoba_allowed_contact", "sc_woba_allowed", "sc_hard_hit_rate_allowed",
+        "sc_xwoba_allowed_contact", "sc_woba_allowed",
+        "sc_avg_batted_ball_ev_allowed", "sc_p90_batted_ball_ev_allowed",
+        "sc_avg_batted_ball_distance_allowed", "sc_p90_batted_ball_distance_allowed",
+        "sc_hard_hit_rate_allowed",
         "sc_barrel_rate_allowed", "sc_k_rate", "sc_bb_rate", "sc_hr_rate", "last_updated_utc",
     ],
 }
@@ -164,7 +172,11 @@ def main() -> None:
                 if dups > 0:
                     failures.append(f"{table} has duplicate key rows: {dups}")
 
-            for col in ["sc_xwoba_contact", "sc_avg_ev", "sc_woba", "sc_release_speed_mean"]:
+            for col in [
+                "sc_xwoba_contact", "sc_avg_ev", "sc_woba", "sc_release_speed_mean",
+                "sc_avg_batted_ball_ev", "sc_avg_batted_ball_distance",
+                "sc_avg_batted_ball_ev_allowed", "sc_avg_batted_ball_distance_allowed",
+            ]:
                 rate = sample_null_rate(conn, table, col)
                 if rate is not None:
                     print({f"{col}_null_rate": round(rate, 4)})

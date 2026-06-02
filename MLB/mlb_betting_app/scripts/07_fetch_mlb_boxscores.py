@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 from pathlib import Path
 import sys
 import time
@@ -17,6 +18,8 @@ from mlb_betting.mlb_stats_api import MlbStatsClient, fetch_game_feed_stats_to_d
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Fetch MLB boxscore/player stats for completed games.")
     parser.add_argument("--days-back", type=int, default=730)
+    parser.add_argument("--start-date", default=None, help="YYYY-MM-DD. Overrides days-back lower bound if provided.")
+    parser.add_argument("--end-date", default=None, help="YYYY-MM-DD. Optional upper bound for completed games.")
     parser.add_argument("--limit", type=int, default=0, help="Optional maximum number of games to fetch. 0 means no limit.")
     parser.add_argument("--sleep", type=float, default=0.10, help="Seconds to sleep between MLB Stats API calls.")
     parser.add_argument("--refresh", action="store_true", help="Re-fetch games already present in stat tables.")
@@ -40,18 +43,37 @@ def main() -> None:
                 GROUP BY game_pk
             ) p ON g.game_pk = p.game_pk
             WHERE g.target_home_win IS NOT NULL
-              AND date(g.official_date) >= date('now', ?)
         """
-        params = (f"-{int(args.days_back)} day",)
+        params: list[str] = []
+        if args.start_date:
+            # Validate user input early.
+            datetime.strptime(args.start_date, "%Y-%m-%d")
+            query += " AND date(g.official_date) >= date(?)"
+            params.append(args.start_date)
+        else:
+            query += " AND date(g.official_date) >= date('now', ?)"
+            params.append(f"-{int(args.days_back)} day")
+
+        if args.end_date:
+            datetime.strptime(args.end_date, "%Y-%m-%d")
+            query += " AND date(g.official_date) <= date(?)"
+            params.append(args.end_date)
+
         if not args.refresh:
             query += " AND COALESCE(p.pitcher_rows, 0) = 0"
         query += " ORDER BY g.official_date, g.game_pk"
-        games = read_sql(conn, query, params=params)
+        games = read_sql(conn, query, params=tuple(params))
 
         if args.limit and args.limit > 0:
             games = games.head(args.limit)
 
-        print({"candidate_completed_games": len(games), "refresh": args.refresh, "days_back": args.days_back})
+        print({
+            "candidate_completed_games": len(games),
+            "refresh": args.refresh,
+            "days_back": args.days_back,
+            "start_date": args.start_date,
+            "end_date": args.end_date,
+        })
         total_pitcher_rows = 0
         total_team_rows = 0
         failures = 0

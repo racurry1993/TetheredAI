@@ -37,6 +37,13 @@ def env_int(name: str, default: int | None = None) -> int | None:
     return int(val)
 
 
+def env_str(name: str, default: str | None = None) -> str | None:
+    val = os.environ.get(name)
+    if val is None or str(val).strip() == "":
+        return default
+    return str(val).strip()
+
+
 def ensure_dirs() -> None:
     for path in [
         ROOT / "data",
@@ -144,27 +151,42 @@ def run_pipeline(args: argparse.Namespace) -> None:
             ], required=True)
 
         if args.fetch_games:
-            run_python([
-                "scripts/02_fetch_mlb_games.py",
-                "--days-back", str(args.days_back),
-                "--days-forward", str(args.days_forward),
-                "--game-type", "R",
-                "--chunk-days", str(args.game_chunk_days),
-            ], required=True)
+            game_args = ["scripts/02_fetch_mlb_games.py"]
+            if args.start_date:
+                game_args += ["--start-date", args.start_date]
+            else:
+                game_args += ["--days-back", str(args.days_back)]
+            if args.end_date:
+                game_args += ["--end-date", args.end_date]
+            else:
+                game_args += ["--days-forward", str(args.days_forward)]
+            game_args += ["--game-type", "R", "--chunk-days", str(args.game_chunk_days)]
+            run_python(game_args, required=True)
 
         if args.fetch_boxscores:
-            run_python([
-                "scripts/07_fetch_mlb_boxscores.py",
-                "--days-back", str(args.days_back),
-                "--sleep", str(args.boxscore_sleep),
-            ], required=True)
+            box_args = ["scripts/07_fetch_mlb_boxscores.py"]
+            if args.start_date and script_supports("scripts/07_fetch_mlb_boxscores.py", "--start-date"):
+                box_args += ["--start-date", args.start_date]
+            else:
+                box_args += ["--days-back", str(args.days_back)]
+            if args.end_date and script_supports("scripts/07_fetch_mlb_boxscores.py", "--end-date"):
+                box_args += ["--end-date", args.end_date]
+            box_args += ["--sleep", str(args.boxscore_sleep)]
+            run_python(box_args, required=True)
 
         if args.refresh_statcast:
-            statcast_args = [
-                "scripts/09_fetch_statcast.py",
-                "--days-back", str(args.statcast_days_back),
-                "--chunk-days", str(args.statcast_chunk_days),
-            ]
+            statcast_args = ["scripts/09_fetch_statcast.py"]
+            if args.statcast_start_date:
+                statcast_args += ["--start-date", args.statcast_start_date]
+            elif args.start_date:
+                statcast_args += ["--start-date", args.start_date]
+            else:
+                statcast_args += ["--days-back", str(args.statcast_days_back)]
+            if args.statcast_end_date:
+                statcast_args += ["--end-date", args.statcast_end_date]
+            elif args.end_date:
+                statcast_args += ["--end-date", args.end_date]
+            statcast_args += ["--chunk-days", str(args.statcast_chunk_days)]
             if args.statcast_limit_chunks is not None and script_supports("scripts/09_fetch_statcast.py", "--limit-chunks"):
                 statcast_args += ["--limit-chunks", str(args.statcast_limit_chunks)]
             if args.skip_existing_statcast and script_supports("scripts/09_fetch_statcast.py", "--skip-existing"):
@@ -227,10 +249,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--markets", default=os.environ.get("ODDS_MARKETS", "h2h"))
     parser.add_argument("--days-back", type=int, default=env_int("DAYS_BACK", 14))
     parser.add_argument("--days-forward", type=int, default=env_int("DAYS_FORWARD", 3))
+    parser.add_argument("--start-date", default=env_str("START_DATE", None), help="YYYY-MM-DD lower bound for games/boxscores; prefer for long backfills such as 2020-01-01")
+    parser.add_argument("--end-date", default=env_str("END_DATE", None), help="YYYY-MM-DD upper bound; omit to use today + DAYS_FORWARD")
     parser.add_argument("--game-chunk-days", type=int, default=env_int("GAME_CHUNK_DAYS", 30))
     parser.add_argument("--boxscore-sleep", type=float, default=float(os.environ.get("BOXSCORE_SLEEP", "0.10")))
 
     parser.add_argument("--statcast-days-back", type=int, default=env_int("STATCAST_DAYS_BACK", 14))
+    parser.add_argument("--statcast-start-date", default=env_str("STATCAST_START_DATE", None), help="YYYY-MM-DD lower bound for Statcast; defaults to START_DATE when set")
+    parser.add_argument("--statcast-end-date", default=env_str("STATCAST_END_DATE", None), help="YYYY-MM-DD upper bound for Statcast; defaults to END_DATE when set")
     parser.add_argument("--statcast-chunk-days", type=int, default=env_int("STATCAST_CHUNK_DAYS", 3))
     parser.add_argument("--statcast-limit-chunks", type=int, default=env_int("STATCAST_LIMIT_CHUNKS", None))
     parser.add_argument("--skip-existing-statcast", action="store_true", default=env_bool("SKIP_EXISTING_STATCAST", True))
@@ -247,6 +273,8 @@ def main() -> None:
     log(f"Starting mode={args.mode}")
     log(f"Project root={ROOT}")
     log(f"GCS_BUCKET={os.environ.get('GCS_BUCKET', '')}")
+    log(f"START_DATE={getattr(args, 'start_date', None)} END_DATE={getattr(args, 'end_date', None)}")
+    log(f"STATCAST_START_DATE={getattr(args, 'statcast_start_date', None)} STATCAST_END_DATE={getattr(args, 'statcast_end_date', None)}")
 
     if args.mode == "smoke":
         smoke_test()
