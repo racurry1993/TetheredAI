@@ -7,6 +7,7 @@ data/raw/
 .DS_Store
 data/odds.db
 data/*.db
+*.sqlite
 # Keep or remove these depending on your repo strategy.
 # data/odds.db
 # data/raw/
