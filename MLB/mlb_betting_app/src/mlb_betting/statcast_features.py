@@ -219,19 +219,87 @@ def _asof_attach_by_key(
     return attached
 
 
+
+def _dedupe_by_game_id(
+    df: pd.DataFrame,
+    target_id_col: str = "game_pk",
+    label: str = "frame",
+) -> pd.DataFrame:
+    """Return at most one row per game id.
+
+    The Statcast attachment builders are expected to produce one row per game.
+    If a prior attachment accidentally creates duplicate game rows, a later
+    merge can become many-to-many and explode memory usage. This guard keeps
+    the frame one-row-per-game and makes future joins safe.
+    """
+    if df is None or df.empty:
+        return pd.DataFrame() if df is None else df.copy()
+
+    out = df.copy()
+    if target_id_col not in out.columns:
+        return out
+
+    dup_rows = int(out.duplicated(subset=[target_id_col], keep=False).sum())
+    if dup_rows:
+        unique_dups = int(out.loc[out.duplicated(subset=[target_id_col], keep=False), target_id_col].nunique())
+        LOGGER.warning(
+            "%s has duplicated %s values: %s duplicated rows across %s games. "
+            "Keeping the last row per game to prevent a many-to-many merge.",
+            label,
+            target_id_col,
+            dup_rows,
+            unique_dups,
+        )
+
+    return out.drop_duplicates(subset=[target_id_col], keep="last").reset_index(drop=True)
+
+
 def _merge_home_away(
     base: pd.DataFrame,
     home_df: pd.DataFrame,
     away_df: pd.DataFrame,
     target_id_col: str = "game_pk",
 ) -> pd.DataFrame:
-    out = base.copy()
-    if not home_df.empty:
-        out = out.merge(home_df, on=target_id_col, how="left")
-    if not away_df.empty:
-        out = out.merge(away_df, on=target_id_col, how="left")
-    return out
+    """Safely merge home and away attachment frames onto a game frame.
 
+    This is deliberately defensive. A duplicate `game_pk` in either attachment
+    frame can trigger a huge many-to-many merge. In Cloud Run this manifested as
+    pandas trying to allocate hundreds of GiB. We therefore:
+      1. reduce base/home/away to one row per game,
+      2. drop incoming columns that already exist in the base frame, and
+      3. validate one-to-one merge cardinality.
+    """
+    out = _dedupe_by_game_id(base, target_id_col=target_id_col, label="base_statcast_frame")
+
+    for label, incoming in (("home", home_df), ("away", away_df)):
+        if incoming is None or incoming.empty:
+            continue
+        if target_id_col not in incoming.columns:
+            LOGGER.warning("Skipping %s Statcast attachment because %s is missing.", label, target_id_col)
+            continue
+
+        incoming = _dedupe_by_game_id(
+            incoming,
+            target_id_col=target_id_col,
+            label=f"{label}_statcast_attachment",
+        )
+
+        keep_cols = [target_id_col]
+        keep_cols.extend([c for c in incoming.columns if c != target_id_col and c not in out.columns])
+        incoming = incoming[keep_cols]
+
+        # If all feature columns already exist, there is nothing new to attach.
+        if len(keep_cols) == 1:
+            continue
+
+        out = out.merge(
+            incoming,
+            on=target_id_col,
+            how="left",
+            validate="one_to_one",
+        )
+
+    return out
 
 def _add_diff_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Add home-minus-away differences for matching Statcast columns."""
