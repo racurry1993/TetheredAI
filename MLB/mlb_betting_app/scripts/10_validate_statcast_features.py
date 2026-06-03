@@ -56,12 +56,34 @@ REQUIRED_TABLES: dict[str, list[str]] = {
         "sc_hard_hit_rate_allowed",
         "sc_barrel_rate_allowed", "sc_k_rate", "sc_bb_rate", "sc_hr_rate", "last_updated_utc",
     ],
+
+    "mlb_statcast_team_pitch_type_game": [
+        "game_pk", "team_id", "opponent_team_id", "is_home", "pitch_type_group",
+        "official_date", "game_datetime_utc", "sc_pitch_type_pa",
+        "sc_pitch_type_pitches_seen", "sc_pitch_type_bbe", "sc_pitch_type_woba",
+        "sc_pitch_type_xwoba_contact", "sc_pitch_type_avg_ev",
+        "sc_pitch_type_avg_batted_ball_distance", "sc_pitch_type_hard_hit_rate",
+        "sc_pitch_type_whiff_rate", "sc_pitch_type_csw_rate", "last_updated_utc",
+    ],
+    "mlb_statcast_pitcher_pitch_type_game": [
+        "game_pk", "pitcher_id", "team_id", "opponent_team_id", "is_home",
+        "pitcher_hand", "is_starter", "pitch_type_group", "official_date",
+        "game_datetime_utc", "sc_pitch_type_pitches", "sc_pitch_type_pct",
+        "sc_pitch_type_pa", "sc_pitch_type_bbe_allowed",
+        "sc_pitch_type_release_speed_mean", "sc_pitch_type_whiff_rate",
+        "sc_pitch_type_csw_rate", "sc_pitch_type_woba_allowed",
+        "sc_pitch_type_xwoba_allowed_contact", "sc_pitch_type_avg_ev_allowed",
+        "sc_pitch_type_avg_batted_ball_distance_allowed", "last_updated_utc",
+    ],
 }
 
 PRIMARY_KEY_CHECKS: dict[str, list[str]] = {
     "mlb_statcast_team_game": ["game_pk", "team_id"],
     "mlb_statcast_team_hand_game": ["game_pk", "team_id", "pitcher_hand"],
     "mlb_statcast_pitcher_game": ["game_pk", "pitcher_id", "team_id"],
+
+    "mlb_statcast_team_pitch_type_game": ["game_pk", "team_id", "pitch_type_group"],
+    "mlb_statcast_pitcher_pitch_type_game": ["game_pk", "pitcher_id", "team_id", "pitch_type_group"],
 }
 
 
@@ -176,6 +198,8 @@ def main() -> None:
                 "sc_xwoba_contact", "sc_avg_ev", "sc_woba", "sc_release_speed_mean",
                 "sc_avg_batted_ball_ev", "sc_avg_batted_ball_distance",
                 "sc_avg_batted_ball_ev_allowed", "sc_avg_batted_ball_distance_allowed",
+                "sc_pitch_type_woba", "sc_pitch_type_avg_ev",
+                "sc_pitch_type_woba_allowed", "sc_pitch_type_pct",
             ]:
                 rate = sample_null_rate(conn, table, col)
                 if rate is not None:

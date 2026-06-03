@@ -165,6 +165,79 @@ CREATE INDEX IF NOT EXISTS idx_statcast_pitcher_game_pitcher_date
     ON mlb_statcast_pitcher_game(pitcher_id, game_datetime_utc);
 CREATE INDEX IF NOT EXISTS idx_statcast_pitcher_game_team_date
     ON mlb_statcast_pitcher_game(team_id, game_datetime_utc);
+
+
+CREATE TABLE IF NOT EXISTS mlb_statcast_team_pitch_type_game (
+    game_pk INTEGER NOT NULL,
+    team_id INTEGER NOT NULL,
+    opponent_team_id INTEGER,
+    is_home INTEGER,
+    pitch_type_group TEXT NOT NULL,
+    official_date TEXT,
+    game_datetime_utc TEXT,
+    sc_pitch_type_pa INTEGER,
+    sc_pitch_type_pitches_seen INTEGER,
+    sc_pitch_type_bbe INTEGER,
+    sc_pitch_type_woba REAL,
+    sc_pitch_type_xwoba_contact REAL,
+    sc_pitch_type_avg_ev REAL,
+    sc_pitch_type_p90_ev REAL,
+    sc_pitch_type_avg_batted_ball_distance REAL,
+    sc_pitch_type_p90_batted_ball_distance REAL,
+    sc_pitch_type_hard_hit_rate REAL,
+    sc_pitch_type_barrel_rate REAL,
+    sc_pitch_type_whiff_rate REAL,
+    sc_pitch_type_csw_rate REAL,
+    sc_pitch_type_k_rate REAL,
+    sc_pitch_type_bb_rate REAL,
+    sc_pitch_type_hr_rate REAL,
+    last_updated_utc TEXT NOT NULL,
+    PRIMARY KEY(game_pk, team_id, pitch_type_group)
+);
+
+CREATE INDEX IF NOT EXISTS idx_statcast_team_pitch_type_team_group_date
+    ON mlb_statcast_team_pitch_type_game(team_id, pitch_type_group, game_datetime_utc);
+
+CREATE TABLE IF NOT EXISTS mlb_statcast_pitcher_pitch_type_game (
+    game_pk INTEGER NOT NULL,
+    pitcher_id INTEGER NOT NULL,
+    team_id INTEGER,
+    opponent_team_id INTEGER,
+    is_home INTEGER,
+    pitcher_name TEXT,
+    pitcher_hand TEXT,
+    is_starter INTEGER,
+    pitch_type_group TEXT NOT NULL,
+    official_date TEXT,
+    game_datetime_utc TEXT,
+    sc_pitch_type_pitches INTEGER,
+    sc_pitch_type_pct REAL,
+    sc_pitch_type_pa INTEGER,
+    sc_pitch_type_bbe_allowed INTEGER,
+    sc_pitch_type_release_speed_mean REAL,
+    sc_pitch_type_release_speed_max REAL,
+    sc_pitch_type_release_spin_mean REAL,
+    sc_pitch_type_zone_rate REAL,
+    sc_pitch_type_whiff_rate REAL,
+    sc_pitch_type_csw_rate REAL,
+    sc_pitch_type_called_strike_rate REAL,
+    sc_pitch_type_xwoba_allowed_contact REAL,
+    sc_pitch_type_woba_allowed REAL,
+    sc_pitch_type_avg_ev_allowed REAL,
+    sc_pitch_type_p90_ev_allowed REAL,
+    sc_pitch_type_avg_batted_ball_distance_allowed REAL,
+    sc_pitch_type_p90_batted_ball_distance_allowed REAL,
+    sc_pitch_type_hard_hit_rate_allowed REAL,
+    sc_pitch_type_barrel_rate_allowed REAL,
+    sc_pitch_type_k_rate REAL,
+    sc_pitch_type_bb_rate REAL,
+    sc_pitch_type_hr_rate REAL,
+    last_updated_utc TEXT NOT NULL,
+    PRIMARY KEY(game_pk, pitcher_id, team_id, pitch_type_group)
+);
+
+CREATE INDEX IF NOT EXISTS idx_statcast_pitcher_pitch_type_pitcher_group_date
+    ON mlb_statcast_pitcher_pitch_type_game(pitcher_id, pitch_type_group, game_datetime_utc);
 """
 
 SWING_DESCRIPTIONS = {
@@ -179,6 +252,22 @@ HR_EVENTS = {"home_run"}
 FASTBALL_TYPES = {"FF", "SI", "FT", "FC", "FA"}
 BREAKING_TYPES = {"SL", "CU", "KC", "ST", "SV"}
 OFFSPEED_TYPES = {"CH", "FS", "FO", "SC", "KN"}
+
+PITCH_TYPE_GROUPS = {"fastball", "breaking", "offspeed", "other"}
+
+
+def pitch_type_group(pitch_type: object) -> str:
+    """Coarse pitch bucket for sparse-but-useful pitch-mix matchup features."""
+    if pd.isna(pitch_type):
+        return "other"
+    pt = str(pitch_type).upper()
+    if pt in FASTBALL_TYPES:
+        return "fastball"
+    if pt in BREAKING_TYPES:
+        return "breaking"
+    if pt in OFFSPEED_TYPES:
+        return "offspeed"
+    return "other"
 
 
 def parse_args() -> argparse.Namespace:
@@ -358,6 +447,8 @@ def prepare_statcast(raw: pd.DataFrame, games: pd.DataFrame, starters: pd.DataFr
     df["is_bb"] = events.isin(WALK_EVENTS)
     df["is_hr"] = events.isin(HR_EVENTS)
     df["pitcher_hand"] = df.get("p_throws", pd.Series(index=df.index, dtype="object")).fillna("UNK").astype(str)
+    df["pitch_type"] = df.get("pitch_type", pd.Series(index=df.index, dtype="object")).fillna("UNK").astype(str)
+    df["pitch_type_group"] = df["pitch_type"].map(pitch_type_group)
 
     if not starters.empty:
         st = starters[["game_pk", "pitcher_id", "team_id", "is_starter", "pitcher_hand"]].copy()
@@ -617,13 +708,154 @@ def aggregate_pitcher_game(df: pd.DataFrame, fetched_at: str) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+
+PITCH_TYPE_TEAM_METRIC_COLS = [
+    "sc_pitch_type_pa",
+    "sc_pitch_type_pitches_seen",
+    "sc_pitch_type_bbe",
+    "sc_pitch_type_woba",
+    "sc_pitch_type_xwoba_contact",
+    "sc_pitch_type_avg_ev",
+    "sc_pitch_type_p90_ev",
+    "sc_pitch_type_avg_batted_ball_distance",
+    "sc_pitch_type_p90_batted_ball_distance",
+    "sc_pitch_type_hard_hit_rate",
+    "sc_pitch_type_barrel_rate",
+    "sc_pitch_type_whiff_rate",
+    "sc_pitch_type_csw_rate",
+    "sc_pitch_type_k_rate",
+    "sc_pitch_type_bb_rate",
+    "sc_pitch_type_hr_rate",
+]
+
+PITCH_TYPE_PITCHER_METRIC_COLS = [
+    "sc_pitch_type_pitches",
+    "sc_pitch_type_pct",
+    "sc_pitch_type_pa",
+    "sc_pitch_type_bbe_allowed",
+    "sc_pitch_type_release_speed_mean",
+    "sc_pitch_type_release_speed_max",
+    "sc_pitch_type_release_spin_mean",
+    "sc_pitch_type_zone_rate",
+    "sc_pitch_type_whiff_rate",
+    "sc_pitch_type_csw_rate",
+    "sc_pitch_type_called_strike_rate",
+    "sc_pitch_type_xwoba_allowed_contact",
+    "sc_pitch_type_woba_allowed",
+    "sc_pitch_type_avg_ev_allowed",
+    "sc_pitch_type_p90_ev_allowed",
+    "sc_pitch_type_avg_batted_ball_distance_allowed",
+    "sc_pitch_type_p90_batted_ball_distance_allowed",
+    "sc_pitch_type_hard_hit_rate_allowed",
+    "sc_pitch_type_barrel_rate_allowed",
+    "sc_pitch_type_k_rate",
+    "sc_pitch_type_bb_rate",
+    "sc_pitch_type_hr_rate",
+]
+
+
+def aggregate_team_pitch_type_game(df: pd.DataFrame, fetched_at: str) -> pd.DataFrame:
+    """Team offense by coarse pitch-type group per game.
+
+    These rows let feature engineering compare an opposing starter's pitch mix
+    to the opponent offense's rolling production against similar pitch groups.
+    """
+    if df.empty or "pitch_type_group" not in df.columns:
+        return pd.DataFrame()
+
+    rows = []
+    for (game_pk, team_id, group), g in df.groupby(["game_pk", "batting_team_id", "pitch_type_group"], dropna=False, sort=False):
+        pa = g[g["is_pa"]]
+        bbe = g[g["is_bbe"]]
+        row = {
+            "game_pk": int(game_pk),
+            "team_id": int(team_id) if pd.notna(team_id) else None,
+            "opponent_team_id": int(g["batting_opponent_team_id"].iloc[0]) if pd.notna(g["batting_opponent_team_id"].iloc[0]) else None,
+            "is_home": int(g["batting_is_home"].iloc[0]) if pd.notna(g["batting_is_home"].iloc[0]) else None,
+            "pitch_type_group": str(group) if pd.notna(group) else "other",
+            "official_date": g["official_date"].iloc[0],
+            "game_datetime_utc": str(g["game_datetime_utc"].iloc[0]),
+            "sc_pitch_type_pa": int(pa.shape[0]),
+            "sc_pitch_type_pitches_seen": int(g.shape[0]),
+            "sc_pitch_type_bbe": int(bbe.shape[0]),
+            "sc_pitch_type_woba": _rate(pa.get("woba_value", pd.Series(dtype=float)).sum(skipna=True), pa.get("woba_denom", pd.Series(dtype=float)).sum(skipna=True)),
+            "sc_pitch_type_xwoba_contact": _mean(bbe, "estimated_woba_using_speedangle") if not bbe.empty else np.nan,
+            "sc_pitch_type_avg_ev": _mean(bbe, "launch_speed") if not bbe.empty else np.nan,
+            "sc_pitch_type_p90_ev": _quantile(bbe, "launch_speed", 0.90) if not bbe.empty else np.nan,
+            "sc_pitch_type_avg_batted_ball_distance": _mean_any(bbe, ["hit_distance_sc", "hit_distance"]) if not bbe.empty else np.nan,
+            "sc_pitch_type_p90_batted_ball_distance": _quantile_any(bbe, ["hit_distance_sc", "hit_distance"], 0.90) if not bbe.empty else np.nan,
+            "sc_pitch_type_hard_hit_rate": _rate(g["is_hard_hit"].sum(), bbe.shape[0]),
+            "sc_pitch_type_barrel_rate": _rate(g["is_barrel"].sum(), bbe.shape[0]),
+            "sc_pitch_type_whiff_rate": _rate(g["is_whiff"].sum(), g["is_swing"].sum()),
+            "sc_pitch_type_csw_rate": _rate(g["is_csw"].sum(), g.shape[0]),
+            "sc_pitch_type_k_rate": _rate(pa["is_k"].sum(), pa.shape[0]),
+            "sc_pitch_type_bb_rate": _rate(pa["is_bb"].sum(), pa.shape[0]),
+            "sc_pitch_type_hr_rate": _rate(pa["is_hr"].sum(), pa.shape[0]),
+            "last_updated_utc": fetched_at,
+        }
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def aggregate_pitcher_pitch_type_game(df: pd.DataFrame, fetched_at: str) -> pd.DataFrame:
+    """Pitcher quality and usage by coarse pitch-type group per game."""
+    if df.empty or "pitch_type_group" not in df.columns:
+        return pd.DataFrame()
+
+    working = df.copy()
+    working["_pitcher_game_total_pitches"] = working.groupby(["game_pk", "pitcher", "pitching_team_id"], dropna=False)["pitch_type_group"].transform("size")
+
+    rows = []
+    for (game_pk, pitcher, team_id, group), g in working.groupby(["game_pk", "pitcher", "pitching_team_id", "pitch_type_group"], dropna=False, sort=False):
+        pa = g[g["is_pa"]]
+        bbe = g[g["is_bbe"]]
+        total_pitches = pd.to_numeric(g["_pitcher_game_total_pitches"], errors="coerce").max()
+        row = {
+            "game_pk": int(game_pk),
+            "pitcher_id": int(pitcher) if pd.notna(pitcher) else None,
+            "team_id": int(team_id) if pd.notna(team_id) else None,
+            "opponent_team_id": int(g["pitching_opponent_team_id"].iloc[0]) if pd.notna(g["pitching_opponent_team_id"].iloc[0]) else None,
+            "is_home": int(g["pitching_is_home"].iloc[0]) if pd.notna(g["pitching_is_home"].iloc[0]) else None,
+            "pitcher_name": str(g.get("player_name", pd.Series([None])).iloc[0]) if "player_name" in g else None,
+            "pitcher_hand": str(g["pitcher_hand"].dropna().iloc[0]) if g["pitcher_hand"].notna().any() else "UNK",
+            "is_starter": int(pd.to_numeric(g.get("is_starter", pd.Series([0])), errors="coerce").fillna(0).max()),
+            "pitch_type_group": str(group) if pd.notna(group) else "other",
+            "official_date": g["official_date"].iloc[0],
+            "game_datetime_utc": str(g["game_datetime_utc"].iloc[0]),
+            "sc_pitch_type_pitches": int(g.shape[0]),
+            "sc_pitch_type_pct": _rate(g.shape[0], total_pitches),
+            "sc_pitch_type_pa": int(pa.shape[0]),
+            "sc_pitch_type_bbe_allowed": int(bbe.shape[0]),
+            "sc_pitch_type_release_speed_mean": _mean(g, "release_speed"),
+            "sc_pitch_type_release_speed_max": _max(g, "release_speed"),
+            "sc_pitch_type_release_spin_mean": _mean(g, "release_spin_rate"),
+            "sc_pitch_type_zone_rate": _rate(g["is_zone"].sum(), g.shape[0]),
+            "sc_pitch_type_whiff_rate": _rate(g["is_whiff"].sum(), g["is_swing"].sum()),
+            "sc_pitch_type_csw_rate": _rate(g["is_csw"].sum(), g.shape[0]),
+            "sc_pitch_type_called_strike_rate": _rate(g["is_called_strike"].sum(), g.shape[0]),
+            "sc_pitch_type_xwoba_allowed_contact": _mean(bbe, "estimated_woba_using_speedangle") if not bbe.empty else np.nan,
+            "sc_pitch_type_woba_allowed": _rate(pa.get("woba_value", pd.Series(dtype=float)).sum(skipna=True), pa.get("woba_denom", pd.Series(dtype=float)).sum(skipna=True)),
+            "sc_pitch_type_avg_ev_allowed": _mean(bbe, "launch_speed") if not bbe.empty else np.nan,
+            "sc_pitch_type_p90_ev_allowed": _quantile(bbe, "launch_speed", 0.90) if not bbe.empty else np.nan,
+            "sc_pitch_type_avg_batted_ball_distance_allowed": _mean_any(bbe, ["hit_distance_sc", "hit_distance"]) if not bbe.empty else np.nan,
+            "sc_pitch_type_p90_batted_ball_distance_allowed": _quantile_any(bbe, ["hit_distance_sc", "hit_distance"], 0.90) if not bbe.empty else np.nan,
+            "sc_pitch_type_hard_hit_rate_allowed": _rate(g["is_hard_hit"].sum(), bbe.shape[0]),
+            "sc_pitch_type_barrel_rate_allowed": _rate(g["is_barrel"].sum(), bbe.shape[0]),
+            "sc_pitch_type_k_rate": _rate(pa["is_k"].sum(), pa.shape[0]),
+            "sc_pitch_type_bb_rate": _rate(pa["is_bb"].sum(), pa.shape[0]),
+            "sc_pitch_type_hr_rate": _rate(pa["is_hr"].sum(), pa.shape[0]),
+            "last_updated_utc": fetched_at,
+        }
+        rows.append(row)
+    return pd.DataFrame(rows)
+
 def upsert_df(conn: sqlite3.Connection, table: str, df: pd.DataFrame) -> int:
     if df.empty:
         return 0
     cols = list(df.columns)
     placeholders = ", ".join([":" + c for c in cols])
     col_sql = ", ".join(cols)
-    update_cols = [c for c in cols if c not in {"game_pk", "team_id", "pitcher_id", "pitcher_hand"}]
+    update_cols = [c for c in cols if c not in {"game_pk", "team_id", "pitcher_id", "pitcher_hand", "pitch_type_group"}]
     update_sql = ", ".join([f"{c}=excluded.{c}" for c in update_cols])
     if table == "mlb_statcast_team_game":
         conflict = "game_pk, team_id"
@@ -631,6 +863,10 @@ def upsert_df(conn: sqlite3.Connection, table: str, df: pd.DataFrame) -> int:
         conflict = "game_pk, team_id, pitcher_hand"
     elif table == "mlb_statcast_pitcher_game":
         conflict = "game_pk, pitcher_id, team_id"
+    elif table == "mlb_statcast_team_pitch_type_game":
+        conflict = "game_pk, team_id, pitch_type_group"
+    elif table == "mlb_statcast_pitcher_pitch_type_game":
+        conflict = "game_pk, pitcher_id, team_id, pitch_type_group"
     else:
         raise ValueError(f"Unexpected table: {table}")
     sql = f"""
@@ -675,7 +911,7 @@ def main() -> None:
             raise SystemExit("mlb_games is empty. Run scripts/02_fetch_mlb_games.py first.")
         starters = load_starters(conn)
 
-        total_team = total_hand = total_pitcher = 0
+        total_team = total_hand = total_pitcher = total_team_pt = total_pitcher_pt = 0
         chunks = list(date_chunks(start, end, max(1, args.chunk_days)))
         if args.limit_chunks is not None:
             chunks = chunks[: args.limit_chunks]
@@ -702,11 +938,15 @@ def main() -> None:
             team_df = aggregate_team_game(prepared, fetched_at)
             hand_df = aggregate_team_hand_game(prepared, fetched_at)
             pitcher_df = aggregate_pitcher_game(prepared, fetched_at)
+            team_pt_df = aggregate_team_pitch_type_game(prepared, fetched_at)
+            pitcher_pt_df = aggregate_pitcher_pitch_type_game(prepared, fetched_at)
             total_team += upsert_df(conn, "mlb_statcast_team_game", team_df)
             total_hand += upsert_df(conn, "mlb_statcast_team_hand_game", hand_df)
             total_pitcher += upsert_df(conn, "mlb_statcast_pitcher_game", pitcher_df)
+            total_team_pt += upsert_df(conn, "mlb_statcast_team_pitch_type_game", team_pt_df)
+            total_pitcher_pt += upsert_df(conn, "mlb_statcast_pitcher_pitch_type_game", pitcher_pt_df)
             conn.commit()
-            print(f"  Upserted team={len(team_df):,}, team_hand={len(hand_df):,}, pitcher={len(pitcher_df):,}")
+            print(f"  Upserted team={len(team_df):,}, team_hand={len(hand_df):,}, pitcher={len(pitcher_df):,}, team_pitch_type={len(team_pt_df):,}, pitcher_pitch_type={len(pitcher_pt_df):,}")
             time.sleep(args.sleep)
 
         print({
@@ -716,6 +956,8 @@ def main() -> None:
             "team_rows_upserted": total_team,
             "team_hand_rows_upserted": total_hand,
             "pitcher_rows_upserted": total_pitcher,
+            "team_pitch_type_rows_upserted": total_team_pt,
+            "pitcher_pitch_type_rows_upserted": total_pitcher_pt,
             "chunks_skipped_existing": skipped_chunks,
         })
 

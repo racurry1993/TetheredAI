@@ -95,6 +95,57 @@ STATCAST_PITCHER_METRICS = [
 ]
 
 
+
+PITCH_TYPE_GROUPS = ("fastball", "breaking", "offspeed", "other")
+PITCH_TYPE_WINDOWS = (5, 10, 20, 40)
+PITCHER_PITCH_TYPE_WINDOWS = (3, 5, 10, 20)
+PITCHMIX_MATCHUP_WINDOWS = ("season_to_date", "last5", "last10", "last20")
+
+TEAM_PITCH_TYPE_METRICS = [
+    "sc_pitch_type_pa",
+    "sc_pitch_type_pitches_seen",
+    "sc_pitch_type_bbe",
+    "sc_pitch_type_woba",
+    "sc_pitch_type_xwoba_contact",
+    "sc_pitch_type_avg_ev",
+    "sc_pitch_type_p90_ev",
+    "sc_pitch_type_avg_batted_ball_distance",
+    "sc_pitch_type_p90_batted_ball_distance",
+    "sc_pitch_type_hard_hit_rate",
+    "sc_pitch_type_barrel_rate",
+    "sc_pitch_type_whiff_rate",
+    "sc_pitch_type_csw_rate",
+    "sc_pitch_type_k_rate",
+    "sc_pitch_type_bb_rate",
+    "sc_pitch_type_hr_rate",
+]
+
+PITCHER_PITCH_TYPE_METRICS = [
+    "sc_pitch_type_pitches",
+    "sc_pitch_type_pct",
+    "sc_pitch_type_pa",
+    "sc_pitch_type_bbe_allowed",
+    "sc_pitch_type_release_speed_mean",
+    "sc_pitch_type_release_speed_max",
+    "sc_pitch_type_release_spin_mean",
+    "sc_pitch_type_zone_rate",
+    "sc_pitch_type_whiff_rate",
+    "sc_pitch_type_csw_rate",
+    "sc_pitch_type_called_strike_rate",
+    "sc_pitch_type_xwoba_allowed_contact",
+    "sc_pitch_type_woba_allowed",
+    "sc_pitch_type_avg_ev_allowed",
+    "sc_pitch_type_p90_ev_allowed",
+    "sc_pitch_type_avg_batted_ball_distance_allowed",
+    "sc_pitch_type_p90_batted_ball_distance_allowed",
+    "sc_pitch_type_hard_hit_rate_allowed",
+    "sc_pitch_type_barrel_rate_allowed",
+    "sc_pitch_type_k_rate",
+    "sc_pitch_type_bb_rate",
+    "sc_pitch_type_hr_rate",
+]
+
+
 def table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
     row = conn.execute(
         "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,)
@@ -513,6 +564,256 @@ def add_statcast_bullpen_features(features: pd.DataFrame, conn: sqlite3.Connecti
     return _add_diff_columns(out)
 
 
+
+def _merge_attachment(out: pd.DataFrame, att: pd.DataFrame, target_id_col: str = "game_pk") -> pd.DataFrame:
+    """Safely merge a one-row-per-game attachment into an existing feature frame."""
+    if att is None or att.empty or target_id_col not in att.columns:
+        return out
+    out = _dedupe_by_game_id(out, target_id_col=target_id_col, label="feature_frame")
+    att = _dedupe_by_game_id(att, target_id_col=target_id_col, label="feature_attachment")
+    keep_cols = [target_id_col] + [c for c in att.columns if c != target_id_col and c not in out.columns]
+    if len(keep_cols) == 1:
+        return out
+    return out.merge(att[keep_cols], on=target_id_col, how="left", validate="one_to_one")
+
+
+def _attach_pitch_type_rolls(
+    base: pd.DataFrame,
+    roll: pd.DataFrame,
+    target_entity_col: str,
+    history_entity_col: str,
+    feature_cols: Sequence[str],
+    prefix: str,
+) -> pd.DataFrame:
+    """Attach pitch-type rolling rows by game, entity, and pitch_type_group.
+
+    Output is one row per game with group names embedded in column names, e.g.
+    home_team_pitchtype_fastball_sc_pitch_type_woba_last20.
+    """
+    if base.empty or roll.empty or target_entity_col not in base.columns:
+        return pd.DataFrame({"game_pk": base["game_pk"]}) if "game_pk" in base else pd.DataFrame()
+
+    attachments = []
+    for group in PITCH_TYPE_GROUPS:
+        target = base[["game_pk", "game_datetime_utc", target_entity_col]].copy()
+        target["pitch_type_group"] = group
+        hist = roll[roll.get("pitch_type_group", pd.Series(index=roll.index, dtype="object")).astype(str).eq(group)].copy()
+        if hist.empty:
+            continue
+        att = _asof_attach_by_key(
+            target,
+            hist,
+            [target_entity_col, "pitch_type_group"],
+            [history_entity_col, "pitch_type_group"],
+            feature_cols,
+            f"{prefix}{group}_",
+        )
+        attachments.append(att)
+
+    out = pd.DataFrame({"game_pk": base["game_pk"]})
+    for att in attachments:
+        out = _merge_attachment(out, att)
+    return out
+
+
+def _weighted_sum_from_group_cols(frame: pd.DataFrame, pairs: list[tuple[str, str]]) -> pd.Series:
+    """Row-wise weighted average that tolerates missing groups/weights."""
+    numerator = pd.Series(0.0, index=frame.index)
+    denominator = pd.Series(0.0, index=frame.index)
+    any_pair = pd.Series(False, index=frame.index)
+
+    for value_col, weight_col in pairs:
+        if value_col not in frame.columns or weight_col not in frame.columns:
+            continue
+        v = pd.to_numeric(frame[value_col], errors="coerce")
+        w = pd.to_numeric(frame[weight_col], errors="coerce")
+        mask = v.notna() & w.notna() & (w > 0)
+        numerator = numerator.add((v * w).where(mask, 0.0), fill_value=0.0)
+        denominator = denominator.add(w.where(mask, 0.0), fill_value=0.0)
+        any_pair = any_pair | mask
+
+    out = numerator / denominator.replace(0, np.nan)
+    out = out.where(any_pair, np.nan)
+    return out
+
+
+def add_statcast_pitchmix_matchup_features(features: pd.DataFrame, conn: sqlite3.Connection) -> pd.DataFrame:
+    """Add starter pitch-mix vs opponent offense matchup features.
+
+    Example intuition:
+    if the away probable starter throws fastballs 58% of the time, compare that
+    to the home offense's rolling production versus fastballs. We calculate this
+    across coarse pitch groups and add weighted matchup features for each side.
+    """
+    team_pt = read_table(conn, "mlb_statcast_team_pitch_type_game")
+    pitcher_pt = read_table(conn, "mlb_statcast_pitcher_pitch_type_game")
+    if team_pt.empty or pitcher_pt.empty:
+        LOGGER.warning("Pitch-type Statcast tables missing/empty; skipping pitch-mix matchup features.")
+        return features
+
+    base = _prepare_base_games(features, conn)
+
+    team_pt = _safe_numeric(team_pt, TEAM_PITCH_TYPE_METRICS)
+    pitcher_pt = _safe_numeric(pitcher_pt, PITCHER_PITCH_TYPE_METRICS)
+    team_pt["pitch_type_group"] = team_pt.get("pitch_type_group", "other").fillna("other").astype(str)
+    pitcher_pt["pitch_type_group"] = pitcher_pt.get("pitch_type_group", "other").fillna("other").astype(str)
+
+    team_roll = _rolling_history(team_pt, ["team_id", "pitch_type_group"], TEAM_PITCH_TYPE_METRICS, PITCH_TYPE_WINDOWS)
+    pitcher_roll = _rolling_history(pitcher_pt, ["pitcher_id", "pitch_type_group"], PITCHER_PITCH_TYPE_METRICS, PITCHER_PITCH_TYPE_WINDOWS)
+
+    team_feature_cols = [c for c in team_roll.columns if c.startswith("sc_pitch_type_")]
+    pitcher_feature_cols = [c for c in pitcher_roll.columns if c.startswith("sc_pitch_type_")]
+
+    out = base.copy()
+    home_team_att = _attach_pitch_type_rolls(base, team_roll, "home_team_id", "team_id", team_feature_cols, "home_team_pitchtype_")
+    away_team_att = _attach_pitch_type_rolls(base, team_roll, "away_team_id", "team_id", team_feature_cols, "away_team_pitchtype_")
+    home_starter_att = _attach_pitch_type_rolls(base, pitcher_roll, "probable_home_pitcher_id", "pitcher_id", pitcher_feature_cols, "home_starter_pitchtype_")
+    away_starter_att = _attach_pitch_type_rolls(base, pitcher_roll, "probable_away_pitcher_id", "pitcher_id", pitcher_feature_cols, "away_starter_pitchtype_")
+
+    for att in [home_team_att, away_team_att, home_starter_att, away_starter_att]:
+        out = _merge_attachment(out, att)
+
+    matchup_metrics = [
+        "sc_pitch_type_woba",
+        "sc_pitch_type_xwoba_contact",
+        "sc_pitch_type_avg_ev",
+        "sc_pitch_type_p90_ev",
+        "sc_pitch_type_avg_batted_ball_distance",
+        "sc_pitch_type_p90_batted_ball_distance",
+        "sc_pitch_type_hard_hit_rate",
+        "sc_pitch_type_barrel_rate",
+        "sc_pitch_type_whiff_rate",
+        "sc_pitch_type_k_rate",
+        "sc_pitch_type_bb_rate",
+        "sc_pitch_type_hr_rate",
+    ]
+
+    pitcher_quality_metrics = [
+        "sc_pitch_type_woba_allowed",
+        "sc_pitch_type_xwoba_allowed_contact",
+        "sc_pitch_type_avg_ev_allowed",
+        "sc_pitch_type_p90_ev_allowed",
+        "sc_pitch_type_avg_batted_ball_distance_allowed",
+        "sc_pitch_type_p90_batted_ball_distance_allowed",
+        "sc_pitch_type_hard_hit_rate_allowed",
+        "sc_pitch_type_barrel_rate_allowed",
+        "sc_pitch_type_whiff_rate",
+        "sc_pitch_type_k_rate",
+        "sc_pitch_type_bb_rate",
+        "sc_pitch_type_hr_rate",
+    ]
+
+    new_cols: dict[str, pd.Series] = {}
+    for window in PITCHMIX_MATCHUP_WINDOWS:
+        for metric in matchup_metrics:
+            # Home offense weighted by away starter's pitch mix.
+            home_pairs = []
+            away_pairs = []
+            for group in PITCH_TYPE_GROUPS:
+                home_value = f"home_team_pitchtype_{group}_{metric}_{window}"
+                away_value = f"away_team_pitchtype_{group}_{metric}_{window}"
+                away_starter_weight = f"away_starter_pitchtype_{group}_sc_pitch_type_pct_{window}"
+                home_starter_weight = f"home_starter_pitchtype_{group}_sc_pitch_type_pct_{window}"
+                home_pairs.append((home_value, away_starter_weight))
+                away_pairs.append((away_value, home_starter_weight))
+
+            home_name = f"home_pitchmix_matchup_off_{metric}_{window}"
+            away_name = f"away_pitchmix_matchup_off_{metric}_{window}"
+            home_s = _weighted_sum_from_group_cols(out, home_pairs)
+            away_s = _weighted_sum_from_group_cols(out, away_pairs)
+            new_cols[home_name] = home_s
+            new_cols[away_name] = away_s
+            new_cols[f"diff_pitchmix_matchup_off_{metric}_{window}"] = home_s - away_s
+
+        for metric in pitcher_quality_metrics:
+            # Starter's own pitch-type quality weighted by their pitch mix.
+            home_pairs = []
+            away_pairs = []
+            for group in PITCH_TYPE_GROUPS:
+                home_value = f"home_starter_pitchtype_{group}_{metric}_{window}"
+                away_value = f"away_starter_pitchtype_{group}_{metric}_{window}"
+                home_weight = f"home_starter_pitchtype_{group}_sc_pitch_type_pct_{window}"
+                away_weight = f"away_starter_pitchtype_{group}_sc_pitch_type_pct_{window}"
+                home_pairs.append((home_value, home_weight))
+                away_pairs.append((away_value, away_weight))
+
+            home_name = f"home_starter_pitchmix_allowed_{metric}_{window}"
+            away_name = f"away_starter_pitchmix_allowed_{metric}_{window}"
+            home_s = _weighted_sum_from_group_cols(out, home_pairs)
+            away_s = _weighted_sum_from_group_cols(out, away_pairs)
+            new_cols[home_name] = home_s
+            new_cols[away_name] = away_s
+            new_cols[f"diff_starter_pitchmix_allowed_{metric}_{window}"] = home_s - away_s
+
+    if new_cols:
+        out = pd.concat([out, pd.DataFrame(new_cols, index=out.index)], axis=1)
+    return _add_diff_columns(out)
+
+
+def _build_statcast_bullpen_availability_history(bp_team: pd.DataFrame) -> pd.DataFrame:
+    """Pregame bullpen workload/availability features using only prior games."""
+    if bp_team.empty:
+        return pd.DataFrame()
+
+    needed = ["team_id", "game_pk", "game_datetime_utc", "sc_bullpen_pitches", "sc_bullpen_pitchers_used", "sc_bullpen_pa"]
+    for c in needed:
+        if c not in bp_team.columns:
+            bp_team[c] = np.nan
+
+    rows = []
+    for team_id, g in bp_team.sort_values(["team_id", "game_datetime_utc", "game_pk"]).groupby("team_id", dropna=False, sort=False):
+        g = g.sort_values(["game_datetime_utc", "game_pk"]).copy().reset_index(drop=True)
+        out = g[["team_id", "game_pk", "game_datetime_utc"]].copy()
+
+        prev_dt = g["game_datetime_utc"].shift(1)
+        out["sc_bullpen_days_since_last_game"] = (
+            (g["game_datetime_utc"] - prev_dt).dt.total_seconds() / 86400.0
+        )
+
+        pitches = pd.to_numeric(g["sc_bullpen_pitches"], errors="coerce").shift(1)
+        pitchers_used = pd.to_numeric(g["sc_bullpen_pitchers_used"], errors="coerce").shift(1)
+        pa = pd.to_numeric(g["sc_bullpen_pa"], errors="coerce").shift(1)
+        high_usage = pitches.ge(45).astype(float)
+        very_high_usage = pitches.ge(65).astype(float)
+
+        for w in BULLPEN_STATCAST_WINDOWS:
+            out[f"sc_bullpen_pitches_sum_last{w}"] = pitches.rolling(w, min_periods=1).sum()
+            out[f"sc_bullpen_pitches_mean_last{w}"] = pitches.rolling(w, min_periods=1).mean()
+            out[f"sc_bullpen_pitchers_used_sum_last{w}"] = pitchers_used.rolling(w, min_periods=1).sum()
+            out[f"sc_bullpen_pa_sum_last{w}"] = pa.rolling(w, min_periods=1).sum()
+            out[f"sc_bullpen_high_usage_games_last{w}"] = high_usage.rolling(w, min_periods=1).sum()
+            out[f"sc_bullpen_very_high_usage_games_last{w}"] = very_high_usage.rolling(w, min_periods=1).sum()
+
+        # Simple pressure score: recent pitches normalized by rest days. Higher = worse availability.
+        rest = out["sc_bullpen_days_since_last_game"].clip(lower=0.5)
+        out["sc_bullpen_availability_pressure_last3"] = out["sc_bullpen_pitches_sum_last3"] / rest
+        out["sc_bullpen_availability_pressure_last5"] = out["sc_bullpen_pitches_sum_last5"] / rest
+        rows.append(out)
+
+    return pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
+
+
+def add_statcast_bullpen_availability_features(features: pd.DataFrame, conn: sqlite3.Connection) -> pd.DataFrame:
+    """Add workload/rest availability features for each team's bullpen."""
+    stat_pitch = read_table(conn, "mlb_statcast_pitcher_game")
+    if stat_pitch.empty:
+        return features
+    bp_team = _build_statcast_bullpen_team_game(stat_pitch)
+    if bp_team.empty:
+        return features
+    base = _prepare_base_games(features, conn)
+    avail = _build_statcast_bullpen_availability_history(bp_team)
+    if avail.empty:
+        return features
+
+    feature_cols = [c for c in avail.columns if c.startswith("sc_bullpen_")]
+    home = base[["game_pk", "game_datetime_utc", "home_team_id"]].copy()
+    away = base[["game_pk", "game_datetime_utc", "away_team_id"]].copy()
+    home_att = _asof_attach_by_key(home, avail, ["home_team_id"], ["team_id"], feature_cols, "home_bullpen_avail_")
+    away_att = _asof_attach_by_key(away, avail, ["away_team_id"], ["team_id"], feature_cols, "away_bullpen_avail_")
+    out = _merge_home_away(base, home_att, away_att)
+    return _add_diff_columns(out)
+
 def add_statcast_features(features: pd.DataFrame, conn: sqlite3.Connection) -> pd.DataFrame:
     """Add all available Statcast feature blocks to a game feature frame.
 
@@ -525,6 +826,8 @@ def add_statcast_features(features: pd.DataFrame, conn: sqlite3.Connection) -> p
     out = add_statcast_team_vs_hand_features(out, conn)
     out = add_statcast_starter_features(out, conn)
     out = add_statcast_bullpen_features(out, conn)
+    out = add_statcast_bullpen_availability_features(out, conn)
+    out = add_statcast_pitchmix_matchup_features(out, conn)
     return out.copy()
 
 
@@ -536,6 +839,11 @@ def get_statcast_feature_columns(frame: pd.DataFrame) -> list[str]:
         "home_starter_statcast_sc_", "away_starter_statcast_sc_", "diff_starter_statcast_sc_",
         "home_sc_bullpen_", "away_sc_bullpen_", "diff_sc_bullpen_",
         "home_bullpen_sc_", "away_bullpen_sc_", "diff_bullpen_sc_",
+        "home_bullpen_avail_sc_", "away_bullpen_avail_sc_", "diff_bullpen_avail_sc_",
+        "home_team_pitchtype_", "away_team_pitchtype_", "diff_team_pitchtype_",
+        "home_starter_pitchtype_", "away_starter_pitchtype_", "diff_starter_pitchtype_",
+        "home_pitchmix_matchup_", "away_pitchmix_matchup_", "diff_pitchmix_matchup_",
+        "home_starter_pitchmix_", "away_starter_pitchmix_", "diff_starter_pitchmix_",
     )
     cols = [c for c in frame.columns if c.startswith(prefixes)]
     return [c for c in cols if pd.api.types.is_numeric_dtype(frame[c])]
