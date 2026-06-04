@@ -1,0 +1,9 @@
+**/data/odds.db
+**/data/*.db
+**/data/processed/
+**/data/processed/*.parquet
+**/data/predictions/
+**/data/raw/
+**/*.sqlite
+**/models/*.joblib
+EOD

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import timezone
+import joblib
+from datetime import datetime, timezone
 from pathlib import Path
 import sys
 from typing import Any
@@ -17,12 +18,56 @@ from mlb_betting.betting_math import expected_value_per_unit
 from mlb_betting.config import get_settings
 from mlb_betting.db import connect, init_db, insert_prediction_rows
 from mlb_betting.logging_utils import configure_logging
-from mlb_betting.modeling import latest_model_path, load_model_bundle, utc_now_iso
 
 
 BAD_DETAIL_STATE_PATTERN = "final|postponed|completed|cancelled|canceled|suspended|game over"
 DEFAULT_ALLOWED_ABSTRACT_STATES = {"preview"}
 LIVE_ALLOWED_ABSTRACT_STATES = {"preview", "live"}
+
+
+def utc_now_iso() -> str:
+    """Return current UTC timestamp in ISO-8601 Z format."""
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def latest_model_path(model_dir: Path) -> Path:
+    """Find the preferred/latest model bundle without depending on mlb_betting.modeling.
+
+    Priority:
+      1. models/mlb_moneyline_champion.joblib
+      2. newest *.joblib in model_dir by modified time
+    """
+    model_dir = Path(model_dir)
+    champion = model_dir / "mlb_moneyline_champion.joblib"
+    if champion.exists():
+        return champion
+
+    candidates = sorted(
+        model_dir.glob("*.joblib"),
+        key=lambda x: x.stat().st_mtime,
+        reverse=True,
+    )
+    if not candidates:
+        raise FileNotFoundError(f"No .joblib model files found in {model_dir}")
+    return candidates[0]
+
+
+def load_model_bundle(model_path: Path) -> dict[str, Any]:
+    """Load a joblib model bundle safely.
+
+    The notebook exports a dict with keys like model, feature_cols, target_col,
+    probability_shrink, and shrink_center. If a raw estimator is ever provided,
+    wrap it into a minimal bundle so the rest of the scorer still works.
+    """
+    model_path = Path(model_path)
+    obj = joblib.load(model_path)
+    if isinstance(obj, dict):
+        return obj
+    return {
+        "model_name": model_path.stem,
+        "model": obj,
+        "feature_cols": getattr(obj, "feature_names_in_", None),
+    }
 
 
 def parse_args() -> argparse.Namespace:
@@ -105,6 +150,25 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Write unresolved/historical/far-future candidate diagnostics next to the prediction CSV.",
     )
+    parser.add_argument(
+        "--probability-shrink",
+        type=float,
+        default=None,
+        help=(
+            "Optional override for probability shrinkage. If omitted, reads "
+            "probability_shrink from the model bundle or adjacent metadata JSON. "
+            "Use 1.0 for no shrinkage."
+        ),
+    )
+    parser.add_argument(
+        "--shrink-center",
+        type=float,
+        default=None,
+        help=(
+            "Optional override for shrink center. If omitted, reads shrink_center "
+            "from the model bundle or adjacent metadata JSON. Default is 0.5."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -128,6 +192,94 @@ def _safe_ev(model_prob: float | None, price: float | None) -> float:
         return float(expected_value_per_unit(model_prob_f, price_f))
     except Exception:
         return np.nan
+
+
+def _load_adjacent_metadata(model_path: Path) -> dict[str, Any]:
+    """Load optional JSON metadata next to a model bundle.
+
+    Expected default name for the champion artifact is:
+      mlb_moneyline_champion.joblib
+      mlb_moneyline_champion_metadata.json
+
+    The scorer still works if this file is absent; shrinkage can also be stored
+    directly in the joblib bundle.
+    """
+    candidates = [
+        model_path.with_name(f"{model_path.stem}_metadata.json"),
+        model_path.with_name("mlb_moneyline_champion_metadata.json"),
+    ]
+    for meta_path in candidates:
+        if meta_path.exists():
+            try:
+                with open(meta_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, dict):
+                    return data
+            except Exception as exc:
+                print({"metadata_warning": f"Failed to load {meta_path}: {exc}"})
+    return {}
+
+
+def _resolve_shrink_settings(
+    args: argparse.Namespace,
+    bundle: dict[str, Any],
+    metadata: dict[str, Any],
+) -> tuple[float, float]:
+    """Resolve probability shrinkage settings.
+
+    Priority:
+      1. CLI overrides
+      2. joblib bundle keys
+      3. adjacent metadata JSON keys
+      4. no shrinkage, centered at 0.5
+    """
+    shrink = args.probability_shrink
+    center = args.shrink_center
+
+    if shrink is None:
+        shrink = bundle.get("probability_shrink", metadata.get("probability_shrink", 1.0))
+    if center is None:
+        center = bundle.get("shrink_center", metadata.get("shrink_center", 0.5))
+
+    try:
+        shrink = float(shrink)
+    except Exception:
+        shrink = 1.0
+
+    try:
+        center = float(center)
+    except Exception:
+        center = 0.5
+
+    if not np.isfinite(shrink):
+        shrink = 1.0
+    if not np.isfinite(center):
+        center = 0.5
+
+    # Keep values sane; shrink > 1 intentionally makes probabilities more extreme,
+    # so cap it unless intentionally changed in this code later.
+    shrink = max(0.0, min(shrink, 1.0))
+    center = max(0.01, min(center, 0.99))
+    return shrink, center
+
+
+def apply_probability_shrink(
+    probabilities: np.ndarray | pd.Series | list[float],
+    *,
+    shrink: float = 1.0,
+    center: float = 0.5,
+    clip_low: float = 0.01,
+    clip_high: float = 0.99,
+) -> np.ndarray:
+    """Pull probabilities toward a center value to reduce overconfidence.
+
+    Example: center=0.5, shrink=0.80
+      raw 0.60 -> 0.5 + 0.80 * (0.60 - 0.5) = 0.58
+      raw 0.40 -> 0.5 + 0.80 * (0.40 - 0.5) = 0.42
+    """
+    p = np.asarray(probabilities, dtype=float)
+    p_adj = center + shrink * (p - center)
+    return np.clip(p_adj, clip_low, clip_high)
 
 
 def _normalize_status_text(series: pd.Series) -> pd.Series:
@@ -338,9 +490,11 @@ def main() -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     bundle = load_model_bundle(model_path)
+    metadata = _load_adjacent_metadata(model_path)
     estimator = bundle.get("estimator") or bundle.get("model") or bundle.get("pipeline")
     feature_cols = bundle.get("feature_cols") or bundle.get("features") or bundle.get("feature_columns")
-    run_id = bundle.get("run_id") or bundle.get("model_name") or model_path.stem
+    run_id = bundle.get("run_id") or bundle.get("model_name") or metadata.get("model_name") or model_path.stem
+    probability_shrink, shrink_center = _resolve_shrink_settings(args, bundle, metadata)
 
     if estimator is None or feature_cols is None:
         raise SystemExit(
@@ -401,9 +555,17 @@ def main() -> None:
         if col not in upcoming.columns:
             upcoming[col] = np.nan
 
-    probs = estimator.predict_proba(upcoming[feature_cols])[:, 1]
-    upcoming["model_home_win_prob"] = probs
+    raw_probs = estimator.predict_proba(upcoming[feature_cols])[:, 1]
+    shrunk_probs = apply_probability_shrink(
+        raw_probs,
+        shrink=probability_shrink,
+        center=shrink_center,
+    )
+    upcoming["model_home_win_prob_raw"] = raw_probs
+    upcoming["model_home_win_prob"] = shrunk_probs
     upcoming["model_away_win_prob"] = 1.0 - upcoming["model_home_win_prob"]
+    upcoming["probability_shrink"] = probability_shrink
+    upcoming["shrink_center"] = shrink_center
 
     upcoming["edge_home"] = upcoming["model_home_win_prob"] - upcoming["market_home_no_vig_prob"]
     upcoming["edge_away"] = upcoming["model_away_win_prob"] - upcoming["market_away_no_vig_prob"]
@@ -441,8 +603,11 @@ def main() -> None:
         "detailed_state",
         "home_team_name",
         "away_team_name",
+        "model_home_win_prob_raw",
         "model_home_win_prob",
         "model_away_win_prob",
+        "probability_shrink",
+        "shrink_center",
         "market_home_no_vig_prob",
         "market_away_no_vig_prob",
         "home_moneyline_median",
@@ -498,6 +663,8 @@ def main() -> None:
         "model": str(model_path),
         "score_start": str(start_ts),
         "score_end": str(end_ts),
+        "probability_shrink": probability_shrink,
+        "shrink_center": shrink_center,
     })
 
 
