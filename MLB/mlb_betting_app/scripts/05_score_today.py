@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import joblib
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 import sys
@@ -192,6 +193,259 @@ def _safe_ev(model_prob: float | None, price: float | None) -> float:
         return float(expected_value_per_unit(model_prob_f, price_f))
     except Exception:
         return np.nan
+
+
+def _normalize_team_name(value: Any) -> str:
+    """Normalize team names for matching MLB Stats API rows to Odds API rows."""
+    if value is None:
+        return ""
+    text = str(value).strip().lower()
+    text = re.sub(r"[^a-z0-9]+", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+
+    aliases = {
+        "oakland athletics": "athletics",
+        "athletics": "athletics",
+        "la dodgers": "los angeles dodgers",
+        "los angeles dodgers": "los angeles dodgers",
+        "la angels": "los angeles angels",
+        "los angeles angels": "los angeles angels",
+        "ny yankees": "new york yankees",
+        "new york yankees": "new york yankees",
+        "ny mets": "new york mets",
+        "new york mets": "new york mets",
+        "sf giants": "san francisco giants",
+        "san francisco giants": "san francisco giants",
+        "sd padres": "san diego padres",
+        "san diego padres": "san diego padres",
+        "tb rays": "tampa bay rays",
+        "tampa bay rays": "tampa bay rays",
+        "kc royals": "kansas city royals",
+        "kansas city royals": "kansas city royals",
+        "st louis cardinals": "st louis cardinals",
+        "saint louis cardinals": "st louis cardinals",
+    }
+    return aliases.get(text, text)
+
+
+def _american_to_implied_prob(price: Any) -> float:
+    price_f = _safe_float(price)
+    if price_f is None or price_f == 0:
+        return np.nan
+    if price_f > 0:
+        return 100.0 / (price_f + 100.0)
+    return (-price_f) / ((-price_f) + 100.0)
+
+
+def _no_vig_probs_from_prices(home_price: Any, away_price: Any) -> tuple[float, float]:
+    home_imp = _american_to_implied_prob(home_price)
+    away_imp = _american_to_implied_prob(away_price)
+    denom = home_imp + away_imp
+    if not np.isfinite(denom) or denom <= 0:
+        return np.nan, np.nan
+    return float(home_imp / denom), float(away_imp / denom)
+
+
+def _latest_h2h_odds_events(conn) -> pd.DataFrame:
+    """Return latest median H2H price by event/side from odds_events + odds_snapshots.
+
+    The daily feature parquet may miss odds for games whose MLB official_date differs
+    from the Odds API UTC commence date, especially U.S. night games after 00:00 UTC.
+    This table is used as a final scorer-side odds attachment keyed by team names and
+    start-time proximity instead of official_date equality.
+    """
+    try:
+        raw = pd.read_sql_query(
+            """
+            SELECT
+                e.event_id,
+                e.commence_time_utc,
+                e.home_team,
+                e.away_team,
+                e.home_team_norm,
+                e.away_team_norm,
+                s.fetched_at_utc,
+                s.bookmaker_key,
+                s.market_key,
+                s.outcome_name,
+                s.outcome_name_norm,
+                s.outcome_price
+            FROM odds_snapshots s
+            JOIN odds_events e
+              ON e.event_id = s.event_id
+            WHERE lower(s.market_key) IN ('h2h', 'moneyline')
+              AND s.outcome_price IS NOT NULL
+            """,
+            conn,
+        )
+    except Exception as exc:
+        print({"odds_attachment_warning": f"Could not read odds tables: {exc}"})
+        return pd.DataFrame()
+
+    if raw.empty:
+        return pd.DataFrame()
+
+    raw["fetched_at_utc"] = pd.to_datetime(raw["fetched_at_utc"], utc=True, errors="coerce")
+    raw["commence_time_utc"] = pd.to_datetime(raw["commence_time_utc"], utc=True, errors="coerce")
+    raw["home_norm"] = raw["home_team_norm"].map(_normalize_team_name)
+    raw["away_norm"] = raw["away_team_norm"].map(_normalize_team_name)
+    raw["outcome_norm"] = raw["outcome_name_norm"].where(
+        raw["outcome_name_norm"].notna(),
+        raw["outcome_name"],
+    ).map(_normalize_team_name)
+
+    # Keep one latest row per book/outcome to avoid old snapshots double-counting.
+    raw = raw.sort_values(["fetched_at_utc", "event_id"])
+    raw = raw.drop_duplicates(
+        ["event_id", "bookmaker_key", "market_key", "outcome_norm"],
+        keep="last",
+    )
+
+    raw["side"] = np.where(
+        raw["outcome_norm"].eq(raw["home_norm"]),
+        "home",
+        np.where(raw["outcome_norm"].eq(raw["away_norm"]), "away", None),
+    )
+    raw = raw[raw["side"].notna()].copy()
+    if raw.empty:
+        return pd.DataFrame()
+
+    grouped = (
+        raw.groupby(
+            [
+                "event_id",
+                "commence_time_utc",
+                "home_team",
+                "away_team",
+                "home_norm",
+                "away_norm",
+                "side",
+            ],
+            dropna=False,
+        )["outcome_price"]
+        .median()
+        .reset_index()
+    )
+
+    pivot = grouped.pivot_table(
+        index=["event_id", "commence_time_utc", "home_team", "away_team", "home_norm", "away_norm"],
+        columns="side",
+        values="outcome_price",
+        aggfunc="median",
+    ).reset_index()
+    pivot.columns.name = None
+
+    if "home" not in pivot.columns:
+        pivot["home"] = np.nan
+    if "away" not in pivot.columns:
+        pivot["away"] = np.nan
+
+    pivot = pivot.rename(columns={"home": "home_moneyline_median", "away": "away_moneyline_median"})
+    probs = pivot.apply(
+        lambda row: _no_vig_probs_from_prices(row["home_moneyline_median"], row["away_moneyline_median"]),
+        axis=1,
+        result_type="expand",
+    )
+    pivot["market_home_no_vig_prob"] = probs[0]
+    pivot["market_away_no_vig_prob"] = probs[1]
+    return pivot
+
+
+def attach_latest_moneyline_odds_from_db(
+    upcoming: pd.DataFrame,
+    db_path: Path,
+    *,
+    max_start_diff_minutes: int = 180,
+) -> pd.DataFrame:
+    """Attach latest H2H odds by normalized teams + start-time tolerance.
+
+    This intentionally ignores MLB official_date because late U.S. games often have
+    an official_date of the local baseball date but a UTC commence date of the next day.
+    """
+    out = upcoming.copy()
+    for col in [
+        "market_home_no_vig_prob",
+        "market_away_no_vig_prob",
+        "home_moneyline_median",
+        "away_moneyline_median",
+    ]:
+        if col not in out.columns:
+            out[col] = np.nan
+
+    before = int(
+        out["market_home_no_vig_prob"].notna()
+        & out["market_away_no_vig_prob"].notna()
+        & out["home_moneyline_median"].notna()
+        & out["away_moneyline_median"].notna()
+    .sum()) if len(out) else 0
+
+    try:
+        with connect(db_path) as conn:
+            odds = _latest_h2h_odds_events(conn)
+    except Exception as exc:
+        print({"odds_attachment_warning": f"Could not attach odds from DB: {exc}"})
+        return out
+
+    if odds.empty:
+        print({"odds_attachment": {"events_available": 0, "matched_rows": 0, "rows_with_market_before": before, "rows_with_market_after": before}})
+        return out
+
+    odds = odds.dropna(subset=["commence_time_utc", "home_norm", "away_norm"]).copy()
+    matched = 0
+    matched_event_ids: list[str] = []
+    start_diffs: list[float] = []
+
+    for idx, row in out.iterrows():
+        game_time = pd.to_datetime(row.get("game_datetime_utc"), utc=True, errors="coerce")
+        if pd.isna(game_time):
+            continue
+
+        home_norm = _normalize_team_name(row.get("home_team_name"))
+        away_norm = _normalize_team_name(row.get("away_team_name"))
+        candidates = odds[
+            odds["home_norm"].eq(home_norm)
+            & odds["away_norm"].eq(away_norm)
+        ].copy()
+        if candidates.empty:
+            continue
+
+        candidates["start_diff_minutes"] = (
+            candidates["commence_time_utc"] - game_time
+        ).dt.total_seconds().abs() / 60.0
+        candidates = candidates[candidates["start_diff_minutes"] <= max_start_diff_minutes]
+        if candidates.empty:
+            continue
+
+        best = candidates.sort_values("start_diff_minutes").iloc[0]
+        out.loc[idx, "home_moneyline_median"] = best["home_moneyline_median"]
+        out.loc[idx, "away_moneyline_median"] = best["away_moneyline_median"]
+        out.loc[idx, "market_home_no_vig_prob"] = best["market_home_no_vig_prob"]
+        out.loc[idx, "market_away_no_vig_prob"] = best["market_away_no_vig_prob"]
+        out.loc[idx, "odds_event_id"] = best["event_id"]
+        out.loc[idx, "odds_start_diff_minutes"] = best["start_diff_minutes"]
+        matched += 1
+        matched_event_ids.append(str(best["event_id"]))
+        start_diffs.append(float(best["start_diff_minutes"]))
+
+    after = int(
+        out["market_home_no_vig_prob"].notna()
+        & out["market_away_no_vig_prob"].notna()
+        & out["home_moneyline_median"].notna()
+        & out["away_moneyline_median"].notna()
+    .sum()) if len(out) else 0
+
+    print({
+        "odds_attachment": {
+            "events_available": int(len(odds)),
+            "matched_rows_from_db": int(matched),
+            "unique_events_matched": int(len(set(matched_event_ids))),
+            "rows_with_market_before": before,
+            "rows_with_market_after": after,
+            "max_start_diff_minutes": max_start_diff_minutes,
+            "matched_start_diff_minutes_max": max(start_diffs) if start_diffs else None,
+        }
+    })
+    return out
 
 
 def _load_adjacent_metadata(model_path: Path) -> dict[str, Any]:
@@ -516,6 +770,10 @@ def main() -> None:
     if args.write_debug_candidates:
         _write_debug_candidate_files(frame, output_path, start_ts, end_ts)
 
+    # Final market-odds attachment directly from odds.db. This fixes games whose
+    # MLB official_date differs from the Odds API UTC commence date.
+    upcoming = attach_latest_moneyline_odds_from_db(upcoming, settings.odds_db_path)
+
     if upcoming.empty:
         raise SystemExit(
             "No true upcoming scoring candidates found. "
@@ -612,6 +870,8 @@ def main() -> None:
         "market_away_no_vig_prob",
         "home_moneyline_median",
         "away_moneyline_median",
+        "odds_event_id",
+        "odds_start_diff_minutes",
         "edge_home",
         "edge_away",
         "home_expected_value_per_unit",
