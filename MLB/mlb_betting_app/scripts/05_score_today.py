@@ -372,12 +372,16 @@ def attach_latest_moneyline_odds_from_db(
         if col not in out.columns:
             out[col] = np.nan
 
-    before = int(
-        out["market_home_no_vig_prob"].notna()
-        & out["market_away_no_vig_prob"].notna()
-        & out["home_moneyline_median"].notna()
-        & out["away_moneyline_median"].notna()
-    .sum()) if len(out) else 0
+    before = (
+        int((
+            out["market_home_no_vig_prob"].notna()
+            & out["market_away_no_vig_prob"].notna()
+            & out["home_moneyline_median"].notna()
+            & out["away_moneyline_median"].notna()
+        ).sum())
+        if len(out)
+        else 0
+    )
 
     try:
         with connect(db_path) as conn:
@@ -427,12 +431,16 @@ def attach_latest_moneyline_odds_from_db(
         matched_event_ids.append(str(best["event_id"]))
         start_diffs.append(float(best["start_diff_minutes"]))
 
-    after = int(
-        out["market_home_no_vig_prob"].notna()
-        & out["market_away_no_vig_prob"].notna()
-        & out["home_moneyline_median"].notna()
-        & out["away_moneyline_median"].notna()
-    .sum()) if len(out) else 0
+    after = (
+        int((
+            out["market_home_no_vig_prob"].notna()
+            & out["market_away_no_vig_prob"].notna()
+            & out["home_moneyline_median"].notna()
+            & out["away_moneyline_median"].notna()
+        ).sum())
+        if len(out)
+        else 0
+    )
 
     print({
         "odds_attachment": {
