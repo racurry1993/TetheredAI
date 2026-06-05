@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import os
 from pathlib import Path
+from zoneinfo import ZoneInfo
 from typing import Any
 
 import numpy as np
@@ -24,6 +25,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1] if "streamlit_app" in str(Pat
 DATA_DIR = Path(os.getenv("DATA_DIR", "data"))
 PREDICTIONS_DIR = DATA_DIR / "predictions"
 DEFAULT_PREDICTIONS_FILE = PREDICTIONS_DIR / "mlb_moneyline_predictions.csv"
+APP_TIMEZONE = os.getenv("APP_TIMEZONE", "America/Chicago")
 
 
 # -----------------------------------------------------------------------------
@@ -308,6 +310,36 @@ CUSTOM_CSS = """
 [data-testid="stDataFrame"] {
     border-radius: 14px;
     overflow: hidden;
+}
+
+
+/* Make Streamlit expanders stand out */
+div[data-testid="stExpander"] {
+    border: 1px solid rgba(96,165,250,.62) !important;
+    border-radius: 18px !important;
+    background: rgba(15, 23, 42, .76) !important;
+    box-shadow: 0 14px 34px rgba(0,0,0,.24) !important;
+    margin-top: 1rem !important;
+    margin-bottom: 1.15rem !important;
+    overflow: hidden !important;
+}
+
+div[data-testid="stExpander"] details summary {
+    color: #ffffff !important;
+    font-weight: 900 !important;
+    font-size: 1rem !important;
+    background: linear-gradient(90deg, rgba(37,99,235,.96), rgba(14,165,233,.86)) !important;
+    border-radius: 14px !important;
+    padding: .92rem 1rem !important;
+}
+
+div[data-testid="stExpander"] details summary:hover {
+    filter: brightness(1.08);
+    cursor: pointer;
+}
+
+div[data-testid="stExpander"] div[data-testid="stMarkdownContainer"] {
+    color: #e5e7eb !important;
 }
 
 .small-note {
@@ -600,7 +632,7 @@ def render_data_dictionary() -> None:
         columns=["Column", "Meaning"],
     )
 
-    with st.expander("Data dictionary", expanded=False):
+    with st.expander("📘 Data Dictionary — What Each Column Means", expanded=False):
         st.dataframe(dictionary, use_container_width=True, hide_index=True)
 
 
@@ -611,31 +643,27 @@ render_hero()
 
 st.markdown('<a id="mlb"></a>', unsafe_allow_html=True)
 st.markdown('<div class="section-title">MLB Moneyline Predictions</div>', unsafe_allow_html=True)
-
-from zoneinfo import ZoneInfo
-APP_TIMEZONE = os.getenv("APP_TIMEZONE", "America/Chicago")
+st.caption(f"Showing MLB official-date games for {pd.Timestamp.now(tz=ZoneInfo(APP_TIMEZONE)).date()} only.")
 
 with st.sidebar:
     st.header("Controls")
     predictions_path = st.text_input("Predictions CSV", str(DEFAULT_PREDICTIONS_FILE))
     only_market = st.checkbox("Show only games with market odds", value=False)
     only_recommended = st.checkbox("Show only recommendations", value=False)
-    st.caption("Showing today’s MLB official-date games only.")
+    st.caption(f"Showing today’s MLB official-date games only ({APP_TIMEZONE}).")
     st.caption("The web app syncs GCS prediction artifacts every few minutes in the background.")
 
 predictions = load_predictions(predictions_path)
 
 today_local = pd.Timestamp.now(tz=ZoneInfo(APP_TIMEZONE)).date()
 
-if "official_date" in predictions.columns:
-    predictions = predictions[predictions["official_date"].eq(today_local)].copy()
-elif "game_datetime_utc" in predictions.columns:
-    predictions = predictions[
-        predictions["game_datetime_utc"]
-        .dt.tz_convert(APP_TIMEZONE)
-        .dt.date
-        .eq(today_local)
-    ].copy()
+if not predictions.empty:
+    if "official_date" in predictions.columns:
+        predictions = predictions[predictions["official_date"].eq(today_local)].copy()
+    elif "game_datetime_utc" in predictions.columns:
+        predictions = predictions[
+            predictions["game_datetime_utc"].dt.tz_convert(APP_TIMEZONE).dt.date.eq(today_local)
+        ].copy()
 
 if predictions.empty:
     st.warning(
@@ -643,7 +671,7 @@ if predictions.empty:
         "and uploaded mlb/predictions/mlb_moneyline_predictions.csv to GCS."
     )
     st.stop()
-    
+
 filtered = predictions.copy()
 if only_market and "has_market_odds" in filtered.columns:
     filtered = filtered[filtered["has_market_odds"].fillna(0).astype(int).eq(1)]
