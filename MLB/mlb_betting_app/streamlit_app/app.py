@@ -421,6 +421,67 @@ def _expected_side(row: pd.Series) -> tuple[str, float | None]:
     return "—", None
 
 
+def _recommended_side_type(row: pd.Series) -> str | None:
+    side = row.get("recommended_side")
+    if not _is_recommended(side):
+        return None
+
+    side_text = str(side).strip()
+    home = str(row.get("home_team_name", "")).strip()
+    away = str(row.get("away_team_name", "")).strip()
+
+    if side_text == home:
+        return "home"
+    if side_text == away:
+        return "away"
+    return None
+
+
+def _recommended_model_prob(row: pd.Series) -> float | None:
+    direct = row.get("recommended_model_prob")
+    if pd.notna(direct):
+        return float(direct)
+
+    side_type = _recommended_side_type(row)
+    if side_type == "home" and pd.notna(row.get("model_home_win_prob")):
+        return float(row.get("model_home_win_prob"))
+    if side_type == "away" and pd.notna(row.get("model_away_win_prob")):
+        return float(row.get("model_away_win_prob"))
+    return None
+
+
+def _recommended_market_prob(row: pd.Series) -> float | None:
+    direct = row.get("recommended_market_prob")
+    if pd.notna(direct):
+        return float(direct)
+
+    side_type = _recommended_side_type(row)
+    if side_type == "home" and pd.notna(row.get("market_home_no_vig_prob")):
+        return float(row.get("market_home_no_vig_prob"))
+    if side_type == "away" and pd.notna(row.get("market_away_no_vig_prob")):
+        return float(row.get("market_away_no_vig_prob"))
+    return None
+
+
+def _value_bet_label(row: pd.Series) -> str:
+    if not _is_recommended(row.get("recommended_side")):
+        return "Pass"
+    side = str(row.get("recommended_side"))
+    price = _fmt_moneyline(row.get("recommended_price"))
+    return f"{side} {price}" if price != "—" else side
+
+
+def _html_escape(value: Any) -> str:
+    text = "—" if value is None or pd.isna(value) else str(value)
+    return (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&#39;")
+    )
+
+
 def _read_hero_image_css() -> str:
     candidates = [
         Path("streamlit_app/assets/hero.png"),
@@ -524,14 +585,24 @@ def render_metric(label: str, value: str, help_text: str = "") -> None:
 
 
 def render_bet_card(row: pd.Series, rank: int) -> None:
-    matchup = f"{row.get('away_team_name', 'Away')} at {row.get('home_team_name', 'Home')}"
-    game_date = row.get("official_date", "—")
-    side = row.get("recommended_side") if _is_recommended(row.get("recommended_side")) else "—"
-    price = row.get("recommended_price")
+    matchup = _html_escape(f"{row.get('away_team_name', 'Away')} at {row.get('home_team_name', 'Home')}")
+    game_date = _html_escape(row.get("official_date", "—"))
+    model_favorite = _html_escape(row.get("expected_winner", "—"))
+    favorite_prob = row.get("expected_win_prob")
+    value_bet = _html_escape(_value_bet_label(row))
     edge = row.get("edge") if pd.notna(row.get("edge")) else row.get("display_edge")
     ev = row.get("expected_value_per_unit")
-    model_prob = row.get("recommended_model_prob")
-    market_prob = row.get("recommended_market_prob")
+    model_prob = _recommended_model_prob(row)
+    market_prob = _recommended_market_prob(row)
+
+    chips = [
+        f'<span class="chip good">Edge {_fmt_pct(edge)}</span>',
+        f'<span class="chip good">EV {_fmt_decimal(ev)}</span>',
+    ]
+    if model_prob is not None and not pd.isna(model_prob):
+        chips.append(f'<span class="chip">Value Bet Model Prob {_fmt_pct(model_prob)}</span>')
+    if market_prob is not None and not pd.isna(market_prob):
+        chips.append(f'<span class="chip">Market Break-Even {_fmt_pct(market_prob)}</span>')
 
     st.markdown(
         f"""
@@ -539,13 +610,11 @@ def render_bet_card(row: pd.Series, rank: int) -> None:
           <div class="bet-rank">{rank}</div>
           <div class="bet-matchup">{matchup}</div>
           <div class="bet-date">{game_date}</div>
-          <div class="recommend-line">Recommend: {side}</div>
-          <div class="prob-line">Price: <b>{_fmt_moneyline(price)}</b></div>
+          <div class="recommend-line">Value Bet: {value_bet}</div>
+          <div class="prob-line">Model Favorite: <b>{model_favorite}</b> · {_fmt_pct(favorite_prob)}</div>
+          <div class="small-note">A value bet can differ from the most likely winner when the underdog price is favorable.</div>
           <div class="chip-row">
-            <span class="chip good">Edge {_fmt_pct(edge)}</span>
-            <span class="chip good">EV {_fmt_decimal(ev)}</span>
-            <span class="chip">Model {_fmt_pct(model_prob)}</span>
-            <span class="chip">Market {_fmt_pct(market_prob)}</span>
+            {''.join(chips)}
           </div>
         </div>
         """,
@@ -557,21 +626,32 @@ def render_game_card(row: pd.Series) -> None:
     recommended = bool(row.get("is_recommended"))
     status = "Recommend" if recommended else "Pass"
     status_class = "recommend" if recommended else "pass"
-    matchup = f"{row.get('away_team_name', 'Away')} at {row.get('home_team_name', 'Home')}"
-    game_date = row.get("official_date", "—")
+    matchup = _html_escape(f"{row.get('away_team_name', 'Away')} at {row.get('home_team_name', 'Home')}")
+    game_date = _html_escape(row.get("official_date", "—"))
 
-    expected_winner = row.get("expected_winner", "—")
-    expected_prob = row.get("expected_win_prob")
+    model_favorite = _html_escape(row.get("expected_winner", "—"))
+    favorite_prob = row.get("expected_win_prob")
     display_edge = row.get("display_edge")
 
     if recommended:
-        main_side = row.get("recommended_side", "—")
-        main_label = f"Recommended: {main_side}"
-        price = _fmt_moneyline(row.get("recommended_price"))
-        reason = f"Price {price}"
+        main_label = f"Value Bet: {_html_escape(_value_bet_label(row))}"
+        reason = "Positive price-adjusted edge"
+        model_prob = _recommended_model_prob(row)
+        market_prob = _recommended_market_prob(row)
     else:
-        main_label = "Pass"
+        main_label = "Value Bet: Pass"
         reason = _clean_text(row.get("no_bet_reason")) if row.get("no_bet_reason") is not None else "No qualifying edge"
+        model_prob = None
+        market_prob = None
+
+    chips = [
+        f'<span class="chip {"good" if recommended else "pass"}">Edge {_fmt_pct(display_edge)}</span>',
+        f'<span class="chip">{_html_escape(reason)}</span>',
+    ]
+    if model_prob is not None and not pd.isna(model_prob):
+        chips.append(f'<span class="chip">Value Bet Model Prob {_fmt_pct(model_prob)}</span>')
+    if market_prob is not None and not pd.isna(market_prob):
+        chips.append(f'<span class="chip">Market Break-Even {_fmt_pct(market_prob)}</span>')
 
     st.markdown(
         f"""
@@ -580,10 +660,10 @@ def render_game_card(row: pd.Series) -> None:
           <div class="game-matchup" style="margin-top:.65rem;">{matchup}</div>
           <div class="game-date">{game_date}</div>
           <div class="recommend-line">{main_label}</div>
-          <div class="prob-line">Expected outcome: <b>{expected_winner}</b> · {_fmt_pct(expected_prob)}</div>
+          <div class="prob-line">Model Favorite: <b>{model_favorite}</b> · {_fmt_pct(favorite_prob)}</div>
+          <div class="small-note">Model favorite is the most likely winner; value bet is the price-adjusted betting side.</div>
           <div class="chip-row">
-            <span class="chip {'good' if recommended else 'pass'}">Edge {_fmt_pct(display_edge)}</span>
-            <span class="chip">{reason}</span>
+            {''.join(chips)}
           </div>
         </div>
         """,
@@ -598,18 +678,18 @@ def build_display_table(df: pd.DataFrame) -> pd.DataFrame:
         lambda r: f"{r.get('away_team_name', 'Away')} at {r.get('home_team_name', 'Home')}",
         axis=1,
     )
-    table["Expected Winner"] = df.get("expected_winner", "—")
-    table["Expected Win Prob"] = df.get("expected_win_prob", np.nan).apply(_fmt_pct)
+    table["Model Favorite"] = df.get("expected_winner", "—")
+    table["Favorite Win Prob"] = df.get("expected_win_prob", np.nan).apply(_fmt_pct)
     table["Home Win Prob"] = df.get("model_home_win_prob", np.nan).apply(_fmt_pct)
     table["Away Win Prob"] = df.get("model_away_win_prob", np.nan).apply(_fmt_pct)
     table["Home ML"] = df.get("home_moneyline_median", np.nan).apply(_fmt_moneyline)
     table["Away ML"] = df.get("away_moneyline_median", np.nan).apply(_fmt_moneyline)
     table["Best Edge"] = df.get("display_edge", np.nan).apply(_fmt_pct)
-    table["Recommendation"] = df.apply(
+    table["Value Bet"] = df.apply(
         lambda r: r.get("recommended_side") if _is_recommended(r.get("recommended_side")) else "Pass",
         axis=1,
     )
-    table["Reason"] = df.get("no_bet_reason", pd.Series([None] * len(df))).apply(_clean_text)
+    table["Bet Status / Reason"] = df.get("no_bet_reason", pd.Series([None] * len(df))).apply(_clean_text)
     return table
 
 
@@ -618,15 +698,15 @@ def render_data_dictionary() -> None:
         [
             ("Date", "MLB official game date. Displayed as date only."),
             ("Matchup", "Away team at home team."),
-            ("Expected Winner", "Team with the higher model win probability."),
-            ("Expected Win Prob", "Model probability for the expected winner after shrinkage/calibration."),
+            ("Model Favorite", "Team with the higher model win probability. This is who the model thinks is most likely to win."),
+            ("Favorite Win Prob", "Model probability for the model favorite after shrinkage/calibration."),
             ("Home Win Prob", "Calibrated model probability that the home team wins."),
             ("Away Win Prob", "Calibrated model probability that the away team wins."),
             ("Home ML", "Median available home-team moneyline across matched sportsbooks."),
             ("Away ML", "Median available away-team moneyline across matched sportsbooks."),
             ("Best Edge", "Best available probability edge for either team. For recommended bets, this is the selected edge."),
-            ("Recommendation", "Recommended betting side if the edge/EV thresholds pass; otherwise Pass."),
-            ("Reason", "Why the game is a pass or additional context from the scorer."),
+            ("Value Bet", "Recommended price-adjusted betting side if edge/EV thresholds pass; otherwise Pass. This can differ from the model favorite."),
+            ("Bet Status / Reason", "Why the game is a pass or additional context from the scorer."),
             ("EV", "Expected value per unit wagered using the model probability and market price."),
         ],
         columns=["Column", "Meaning"],
@@ -698,7 +778,7 @@ with metric_cols[3]:
     avg_edge = recommended["edge"].mean() if len(recommended) and "edge" in recommended.columns else np.nan
     render_metric("Avg Rec Edge", _fmt_pct(avg_edge), "Average edge for recommendations")
 
-st.markdown('<div class="section-title">Top 3 Recommended Bets</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-title">Top 3 Value Bets</div>', unsafe_allow_html=True)
 
 if recommended.empty:
     st.info("No recommendations currently pass the betting thresholds.")
@@ -710,7 +790,7 @@ else:
             render_bet_card(row, idx)
 
 st.markdown('<div class="section-title">Today’s Game Predictions</div>', unsafe_allow_html=True)
-st.caption("Each card shows whether the model recommends a bet or passes, while still showing the expected outcome and edge.")
+st.caption("Each card separates the model favorite from the value bet. The value bet may be an underdog if the price is favorable enough.")
 
 card_rows = filtered.to_dict(orient="records")
 if not card_rows:
@@ -736,5 +816,3 @@ with st.container():
     )
     st.markdown('</div>', unsafe_allow_html=True)
 
-with st.expander("Raw prediction rows", expanded=False):
-    st.dataframe(filtered, use_container_width=True, hide_index=True)
