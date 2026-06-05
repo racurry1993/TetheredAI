@@ -810,6 +810,7 @@ render_hero()
 st.markdown('<a id="mlb"></a>', unsafe_allow_html=True)
 st.markdown('<div class="section-title">MLB Moneyline Predictions</div>', unsafe_allow_html=True)
 st.caption(f"Showing MLB official-date games for {pd.Timestamp.now(tz=ZoneInfo(APP_TIMEZONE)).date()} only.")
+render_card_explainer()
 
 with st.sidebar:
     st.header("Controls")
