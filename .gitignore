@@ -7,3 +7,13 @@
 **/*.sqlite
 **/models/*.joblib
 EOD
+MLB/mlb_betting_app/export_data/
+MLB/mlb_betting_app/mlb_local_outputs/
+
+# Large generated model/data artifacts
+MLB/mlb_betting_app/models/*.joblib
+MLB/mlb_betting_app/models/*.pkl
+MLB/mlb_betting_app/models/*.pickle
+MLB/mlb_betting_app/**/*.parquet
+MLB/mlb_betting_app/**/*.zip
+MLB/mlb_betting_app/data/*.db

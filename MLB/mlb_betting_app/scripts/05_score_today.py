@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import joblib
+import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,15 +16,97 @@ sys.path.insert(0, str(ROOT / "src"))
 import numpy as np
 import pandas as pd
 
-from mlb_betting.betting_math import expected_value_per_unit
+try:
+    from mlb_betting.betting_math import expected_value_per_unit
+except Exception:  # pragma: no cover - fallback for older repos
+    def _american_profit_per_unit(price: Any) -> float:
+        if price is None or pd.isna(price):
+            return np.nan
+        price_f = float(price)
+        if price_f > 0:
+            return price_f / 100.0
+        if price_f < 0:
+            return 100.0 / abs(price_f)
+        return np.nan
+
+    def expected_value_per_unit(model_prob: float, american_price: float) -> float:
+        if model_prob is None or american_price is None or pd.isna(model_prob) or pd.isna(american_price):
+            return np.nan
+        profit = _american_profit_per_unit(american_price)
+        if not np.isfinite(profit):
+            return np.nan
+        return float(model_prob) * profit - (1.0 - float(model_prob))
+
 from mlb_betting.config import get_settings
 from mlb_betting.db import connect, init_db, insert_prediction_rows
-from mlb_betting.logging_utils import configure_logging
+
+try:
+    from mlb_betting.logging_utils import configure_logging
+except Exception:  # pragma: no cover - fallback for older repos
+    def configure_logging() -> None:
+        return None
 
 
 BAD_DETAIL_STATE_PATTERN = "final|postponed|completed|cancelled|canceled|suspended|game over"
 DEFAULT_ALLOWED_ABSTRACT_STATES = {"preview"}
 LIVE_ALLOWED_ABSTRACT_STATES = {"preview", "live"}
+
+PREFERRED_OUTPUT_COLUMNS = [
+    "run_id",
+    "scored_at_utc",
+    "champion_model_run_id",
+    "champion_model_name",
+    "champion_model_family",
+    "champion_pick_tier_method",
+    "min_pick_tier",
+    "game_pk",
+    "official_date",
+    "game_datetime_utc",
+    "abstract_state",
+    "detailed_state",
+    "home_team_name",
+    "away_team_name",
+    "model_home_win_prob_raw",
+    "model_home_win_prob",
+    "model_away_win_prob",
+    "model_pick",
+    "model_pick_team_type",
+    "model_confidence",
+    "pick_tier",
+    "pick_tier_rank",
+    "probability_shrink",
+    "shrink_center",
+    "market_home_no_vig_prob",
+    "market_away_no_vig_prob",
+    "home_moneyline_median",
+    "away_moneyline_median",
+    "odds_event_id",
+    "odds_start_diff_minutes",
+    "edge_home",
+    "edge_away",
+    "home_expected_value_per_unit",
+    "away_expected_value_per_unit",
+    "market_pick_no_vig_prob",
+    "model_pick_moneyline",
+    "model_pick_edge",
+    "model_pick_expected_value_per_unit",
+    "has_market_odds",
+    "recommended_side",
+    "recommended_team_type",
+    "recommended_price",
+    "recommended_model_prob",
+    "recommended_market_prob",
+    "edge",
+    "expected_value_per_unit",
+    "no_bet_reason",
+]
+
+
+def env_bool(name: str, default: bool = False) -> bool:
+    val = os.environ.get(name)
+    if val is None:
+        return default
+    return str(val).strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
 def utc_now_iso() -> str:
@@ -32,7 +115,7 @@ def utc_now_iso() -> str:
 
 
 def latest_model_path(model_dir: Path) -> Path:
-    """Find the preferred/latest model bundle without depending on mlb_betting.modeling.
+    """Find the preferred/latest model bundle.
 
     Priority:
       1. models/mlb_moneyline_champion.joblib
@@ -56,9 +139,9 @@ def latest_model_path(model_dir: Path) -> Path:
 def load_model_bundle(model_path: Path) -> dict[str, Any]:
     """Load a joblib model bundle safely.
 
-    The notebook exports a dict with keys like model, feature_cols, target_col,
-    probability_shrink, and shrink_center. If a raw estimator is ever provided,
-    wrap it into a minimal bundle so the rest of the scorer still works.
+    The production notebook exports a dict with keys like estimator, model,
+    feature_cols, pick_tiers, metadata, and run_id. If a raw estimator is ever
+    provided, wrap it into a minimal bundle so the rest of the scorer still works.
     """
     model_path = Path(model_path)
     obj = joblib.load(model_path)
@@ -74,31 +157,30 @@ def load_model_bundle(model_path: Path) -> dict[str, Any]:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Score truly upcoming MLB games using the latest model bundle. "
-            "This script intentionally does not treat every null target row as upcoming; "
-            "historical postponed/unresolved rows and far-future schedule rows are filtered out."
+            "Score truly upcoming MLB moneyline games using the production model bundle. "
+            "Pick tiers are read from the bundle; confidence thresholds are not hard-coded in this script."
         )
     )
     parser.add_argument(
         "--features",
-        default=None,
+        default=os.environ.get("FEATURE_PATH"),
         help="Path to feature parquet. Defaults to data/processed/mlb_game_features.parquet.",
     )
     parser.add_argument(
         "--model",
         "--model-path",
         dest="model",
-        default=None,
+        default=os.environ.get("MODEL_PATH"),
         help="Path to model bundle. Defaults to latest model in models/.",
     )
     parser.add_argument(
         "--output",
-        default=None,
+        default=os.environ.get("PREDICTIONS_OUTPUT"),
         help="Path to output CSV. Defaults to data/predictions/mlb_moneyline_predictions.csv.",
     )
     parser.add_argument(
         "--start-date",
-        default=None,
+        default=os.environ.get("SCORE_START_DATE"),
         help=(
             "YYYY-MM-DD. Optional debug/backtest date. If omitted, scoring starts at now UTC "
             "+ --min-minutes-before-start."
@@ -107,40 +189,51 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--days-forward",
         type=int,
-        default=3,
+        default=int(os.environ.get("DAYS_FORWARD", "3")),
         help="Number of days forward to score from start timestamp.",
     )
     parser.add_argument(
         "--min-edge",
         type=float,
-        default=0.02,
-        help="Minimum no-vig probability edge required for a bet recommendation.",
+        default=float(os.environ.get("MIN_EDGE", "0.02")),
+        help="Minimum no-vig probability edge required for a bet recommendation on the model-selected side.",
     )
     parser.add_argument(
         "--min-ev",
         type=float,
-        default=0.00,
-        help="Minimum expected value per 1 unit staked required for a recommendation.",
+        default=float(os.environ.get("MIN_EV", "0.00")),
+        help="Minimum expected value per 1 unit staked required for a recommendation on the model-selected side.",
+    )
+    parser.add_argument(
+        "--min-pick-tier",
+        default=os.environ.get("MIN_PICK_TIER", "Strong"),
+        help=(
+            "Minimum learned pick tier required for a recommendation, for example Strong, Premium, Elite. "
+            "The confidence threshold for that tier is read from the model bundle. Use Pass/Any/None to disable tier gating."
+        ),
     )
     parser.add_argument(
         "--min-minutes-before-start",
         type=int,
-        default=30,
+        default=int(os.environ.get("MIN_MINUTES_BEFORE_START", "30")),
         help="When --start-date is omitted, exclude games starting within this many minutes.",
     )
     parser.add_argument(
         "--include-live",
         action="store_true",
+        default=env_bool("INCLUDE_LIVE", False),
         help="Include rows with abstract_state=Live. Default is scheduled/preview games only.",
     )
     parser.add_argument(
         "--only-bettable",
         action="store_true",
+        default=env_bool("ONLY_BETTABLE", False),
         help="If set, output only rows with matched market odds. By default, outputs model-only rows too.",
     )
     parser.add_argument(
         "--allow-scored-targets",
         action="store_true",
+        default=env_bool("ALLOW_SCORED_TARGETS", False),
         help=(
             "Debug/backtest only: allow rows with a non-null target in the scoring window. "
             "Production scoring should leave this off."
@@ -149,6 +242,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--write-debug-candidates",
         action="store_true",
+        default=env_bool("WRITE_DEBUG_CANDIDATES", False),
         help="Write unresolved/historical/far-future candidate diagnostics next to the prediction CSV.",
     )
     parser.add_argument(
@@ -156,9 +250,8 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=None,
         help=(
-            "Optional override for probability shrinkage. If omitted, reads "
-            "probability_shrink from the model bundle or adjacent metadata JSON. "
-            "Use 1.0 for no shrinkage."
+            "Optional override for probability shrinkage. If omitted, reads probability_shrink from "
+            "the model bundle or adjacent metadata JSON. New learned-tier bundles normally use 1.0."
         ),
     )
     parser.add_argument(
@@ -166,9 +259,15 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=None,
         help=(
-            "Optional override for shrink center. If omitted, reads shrink_center "
-            "from the model bundle or adjacent metadata JSON. Default is 0.5."
+            "Optional override for shrink center. If omitted, reads shrink_center from the model bundle "
+            "or adjacent metadata JSON. Default is 0.5."
         ),
+    )
+    parser.add_argument(
+        "--allow-missing-pick-tiers",
+        action="store_true",
+        default=env_bool("ALLOW_MISSING_PICK_TIERS", False),
+        help="Allow scoring with no learned pick_tiers in the bundle. Not recommended for production.",
     )
     return parser.parse_args()
 
@@ -247,13 +346,7 @@ def _no_vig_probs_from_prices(home_price: Any, away_price: Any) -> tuple[float, 
 
 
 def _latest_h2h_odds_events(conn) -> pd.DataFrame:
-    """Return latest median H2H price by event/side from odds_events + odds_snapshots.
-
-    The daily feature parquet may miss odds for games whose MLB official_date differs
-    from the Odds API UTC commence date, especially U.S. night games after 00:00 UTC.
-    This table is used as a final scorer-side odds attachment keyed by team names and
-    start-time proximity instead of official_date equality.
-    """
+    """Return latest median H2H price by event/side from odds_events + odds_snapshots."""
     try:
         raw = pd.read_sql_query(
             """
@@ -294,7 +387,6 @@ def _latest_h2h_odds_events(conn) -> pd.DataFrame:
         raw["outcome_name"],
     ).map(_normalize_team_name)
 
-    # Keep one latest row per book/outcome to avoid old snapshots double-counting.
     raw = raw.sort_values(["fetched_at_utc", "event_id"])
     raw = raw.drop_duplicates(
         ["event_id", "bookmaker_key", "market_key", "outcome_norm"],
@@ -357,11 +449,7 @@ def attach_latest_moneyline_odds_from_db(
     *,
     max_start_diff_minutes: int = 180,
 ) -> pd.DataFrame:
-    """Attach latest H2H odds by normalized teams + start-time tolerance.
-
-    This intentionally ignores MLB official_date because late U.S. games often have
-    an official_date of the local baseball date but a UTC commence date of the next day.
-    """
+    """Attach latest H2H odds by normalized teams + start-time tolerance."""
     out = upcoming.copy()
     for col in [
         "market_home_no_vig_prob",
@@ -457,15 +545,7 @@ def attach_latest_moneyline_odds_from_db(
 
 
 def _load_adjacent_metadata(model_path: Path) -> dict[str, Any]:
-    """Load optional JSON metadata next to a model bundle.
-
-    Expected default name for the champion artifact is:
-      mlb_moneyline_champion.joblib
-      mlb_moneyline_champion_metadata.json
-
-    The scorer still works if this file is absent; shrinkage can also be stored
-    directly in the joblib bundle.
-    """
+    """Load optional JSON metadata next to a model bundle."""
     candidates = [
         model_path.with_name(f"{model_path.stem}_metadata.json"),
         model_path.with_name("mlb_moneyline_champion_metadata.json"),
@@ -487,14 +567,7 @@ def _resolve_shrink_settings(
     bundle: dict[str, Any],
     metadata: dict[str, Any],
 ) -> tuple[float, float]:
-    """Resolve probability shrinkage settings.
-
-    Priority:
-      1. CLI overrides
-      2. joblib bundle keys
-      3. adjacent metadata JSON keys
-      4. no shrinkage, centered at 0.5
-    """
+    """Resolve probability shrinkage settings."""
     shrink = args.probability_shrink
     center = args.shrink_center
 
@@ -518,8 +591,6 @@ def _resolve_shrink_settings(
     if not np.isfinite(center):
         center = 0.5
 
-    # Keep values sane; shrink > 1 intentionally makes probabilities more extreme,
-    # so cap it unless intentionally changed in this code later.
     shrink = max(0.0, min(shrink, 1.0))
     center = max(0.01, min(center, 0.99))
     return shrink, center
@@ -533,15 +604,114 @@ def apply_probability_shrink(
     clip_low: float = 0.01,
     clip_high: float = 0.99,
 ) -> np.ndarray:
-    """Pull probabilities toward a center value to reduce overconfidence.
-
-    Example: center=0.5, shrink=0.80
-      raw 0.60 -> 0.5 + 0.80 * (0.60 - 0.5) = 0.58
-      raw 0.40 -> 0.5 + 0.80 * (0.40 - 0.5) = 0.42
-    """
+    """Pull probabilities toward a center value to reduce overconfidence."""
     p = np.asarray(probabilities, dtype=float)
     p_adj = center + shrink * (p - center)
     return np.clip(p_adj, clip_low, clip_high)
+
+
+def predict_home_win_prob(model: Any, X: pd.DataFrame) -> np.ndarray:
+    """Return P(target_home_win == 1), checking class order when available."""
+    proba = model.predict_proba(X)
+    classes = getattr(model, "classes_", None)
+
+    if classes is None and hasattr(model, "named_steps"):
+        for step_name in reversed(list(model.named_steps.keys())):
+            step = model.named_steps[step_name]
+            if hasattr(step, "classes_"):
+                classes = step.classes_
+                break
+
+    if classes is None:
+        return np.asarray(proba, dtype=float)[:, 1]
+
+    classes = list(classes)
+    if 1 not in classes:
+        raise ValueError(f"Expected positive class 1 in estimator classes, got {classes}")
+    return np.asarray(proba, dtype=float)[:, classes.index(1)]
+
+
+def _resolve_pick_tiers(bundle: dict[str, Any], metadata: dict[str, Any]) -> dict[str, Any] | None:
+    """Return learned pick tiers from bundle or metadata."""
+    candidates = [
+        bundle.get("pick_tiers"),
+        bundle.get("metadata", {}).get("pick_tiers") if isinstance(bundle.get("metadata"), dict) else None,
+        metadata.get("pick_tiers"),
+    ]
+    for obj in candidates:
+        if isinstance(obj, dict) and isinstance(obj.get("tiers"), list):
+            return obj
+    return None
+
+
+def _tier_names_in_order(pick_tiers: dict[str, Any]) -> list[str]:
+    names = []
+    for item in pick_tiers.get("tiers", []):
+        name = str(item.get("tier", "")).strip()
+        if name and name not in names:
+            names.append(name)
+    return names
+
+
+def _tier_rank_map(pick_tiers: dict[str, Any]) -> dict[str, int]:
+    default_tier = str(pick_tiers.get("default_tier", "Pass")).strip() or "Pass"
+    rank = {default_tier.lower(): 0}
+    for idx, name in enumerate(_tier_names_in_order(pick_tiers), start=1):
+        rank[name.lower()] = idx
+    return rank
+
+
+def _assign_pick_tier_from_learned_tiers(confidence: Any, pick_tiers: dict[str, Any]) -> str:
+    """Assign a pick tier using thresholds saved in the model bundle."""
+    default_tier = pick_tiers.get("default_tier", "Pass")
+    conf = _safe_float(confidence)
+    if conf is None:
+        return default_tier
+
+    tiers = sorted(
+        pick_tiers.get("tiers", []),
+        key=lambda x: float(x.get("threshold", np.inf)),
+        reverse=True,
+    )
+    for tier_info in tiers:
+        threshold = _safe_float(tier_info.get("threshold"))
+        tier_name = tier_info.get("tier")
+        if threshold is not None and tier_name and conf >= threshold:
+            return str(tier_name)
+    return default_tier
+
+
+def _normalize_min_pick_tier(min_pick_tier: str | None) -> str | None:
+    if min_pick_tier is None:
+        return None
+    value = str(min_pick_tier).strip()
+    if value.lower() in {"", "any", "none", "no", "false", "off"}:
+        return None
+    return value
+
+
+def _validate_min_pick_tier(min_pick_tier: str | None, pick_tiers: dict[str, Any]) -> str | None:
+    value = _normalize_min_pick_tier(min_pick_tier)
+    if value is None:
+        return None
+    rank_map = _tier_rank_map(pick_tiers)
+    if value.lower() not in rank_map:
+        available = [pick_tiers.get("default_tier", "Pass")] + _tier_names_in_order(pick_tiers)
+        raise ValueError(f"min_pick_tier={value!r} is not in learned tiers. Available tiers: {available}")
+    return value
+
+
+def _tier_meets_minimum(tier: Any, min_pick_tier: str | None, pick_tiers: dict[str, Any]) -> bool:
+    min_tier = _normalize_min_pick_tier(min_pick_tier)
+    if min_tier is None:
+        return True
+    rank_map = _tier_rank_map(pick_tiers)
+    return rank_map.get(str(tier).lower(), -1) >= rank_map.get(str(min_tier).lower(), 0)
+
+
+def _tier_rank(tier: Any, pick_tiers: dict[str, Any]) -> int:
+    rank_map = _tier_rank_map(pick_tiers)
+    return int(rank_map.get(str(tier).lower(), -1))
 
 
 def _normalize_status_text(series: pd.Series) -> pd.Series:
@@ -581,12 +751,7 @@ def build_scoring_candidates(
     include_live: bool = False,
     allow_scored_targets: bool = False,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
-    """Return rows that are truly candidates for pregame scoring.
-
-    Do not equate target_home_win.isna() with upcoming. Null targets can include
-    postponed/cancelled historical rows or far-future stale schedule rows. This
-    function filters by game time, target status, and MLB game status fields.
-    """
+    """Return rows that are truly candidates for pregame scoring."""
     df = _ensure_datetime_columns(frame)
 
     if "target_home_win" in df.columns and not allow_scored_targets:
@@ -601,8 +766,6 @@ def build_scoring_candidates(
 
     if "abstract_state" in df.columns:
         abstract = _normalize_status_text(df["abstract_state"])
-        # If status is present, require it to be a pregame/live state. Missing statuses are allowed
-        # because some feature files may not carry status fields all the way through.
         status_mask &= abstract.isna() | abstract.isin(allowed_abstract)
 
     if "detailed_state" in df.columns:
@@ -635,74 +798,149 @@ def build_scoring_candidates(
     return candidates, diagnostics
 
 
-def _choose_recommendation(row: pd.Series, min_edge: float, min_ev: float) -> dict[str, object]:
-    """Choose the best moneyline side, or return a no-bet reason."""
-    has_home_market = pd.notna(row.get("market_home_no_vig_prob")) and pd.notna(row.get("home_moneyline_median"))
-    has_away_market = pd.notna(row.get("market_away_no_vig_prob")) and pd.notna(row.get("away_moneyline_median"))
+def _add_model_pick_columns(upcoming: pd.DataFrame, pick_tiers: dict[str, Any]) -> pd.DataFrame:
+    out = upcoming.copy()
+    out["model_pick_team_type"] = np.where(out["model_home_win_prob"] >= 0.5, "home", "away")
+    out["model_pick"] = np.where(
+        out["model_pick_team_type"].eq("home"),
+        out.get("home_team_name", "home"),
+        out.get("away_team_name", "away"),
+    )
+    out["model_confidence"] = np.maximum(out["model_home_win_prob"], out["model_away_win_prob"])
+    out["pick_tier"] = out["model_confidence"].apply(lambda x: _assign_pick_tier_from_learned_tiers(x, pick_tiers))
+    out["pick_tier_rank"] = out["pick_tier"].apply(lambda x: _tier_rank(x, pick_tiers))
+    return out
 
-    if not has_home_market and not has_away_market:
+
+def _add_model_pick_market_columns(upcoming: pd.DataFrame) -> pd.DataFrame:
+    out = upcoming.copy()
+    is_home_pick = out["model_pick_team_type"].eq("home")
+
+    out["market_pick_no_vig_prob"] = np.where(
+        is_home_pick,
+        out["market_home_no_vig_prob"],
+        out["market_away_no_vig_prob"],
+    )
+    out["model_pick_moneyline"] = np.where(
+        is_home_pick,
+        out["home_moneyline_median"],
+        out["away_moneyline_median"],
+    )
+    out["model_pick_edge"] = np.where(
+        is_home_pick,
+        out["edge_home"],
+        out["edge_away"],
+    )
+    out["model_pick_expected_value_per_unit"] = np.where(
+        is_home_pick,
+        out["home_expected_value_per_unit"],
+        out["away_expected_value_per_unit"],
+    )
+    return out
+
+
+def _choose_recommendation(
+    row: pd.Series,
+    min_edge: float,
+    min_ev: float,
+    min_pick_tier: str | None,
+    pick_tiers: dict[str, Any],
+) -> dict[str, object]:
+    """Recommend only the model-selected side if tier, edge, and EV pass.
+
+    The notebook validation tiers are based on selected-side accuracy. Therefore,
+    production should not recommend the opposite side just because it has a value edge.
+    """
+    pick_tier = row.get("pick_tier")
+    if not _tier_meets_minimum(pick_tier, min_pick_tier, pick_tiers):
         return {
             "recommended_side": None,
+            "recommended_team_type": None,
             "recommended_price": np.nan,
+            "recommended_model_prob": np.nan,
+            "recommended_market_prob": np.nan,
             "edge": np.nan,
             "expected_value_per_unit": np.nan,
-            "no_bet_reason": "no_matched_market_odds",
+            "no_bet_reason": f"below_min_pick_tier:{pick_tier}",
         }
 
-    candidates = []
+    side_type = row.get("model_pick_team_type")
+    side_name = row.get("model_pick")
+    model_prob = _safe_float(row.get("model_confidence"))
+    market_prob = _safe_float(row.get("market_pick_no_vig_prob"))
+    price = _safe_float(row.get("model_pick_moneyline"))
+    edge = _safe_float(row.get("model_pick_edge"))
+    ev = _safe_float(row.get("model_pick_expected_value_per_unit"))
 
-    if has_home_market:
-        home_edge = row.get("edge_home", np.nan)
-        home_ev = row.get("home_expected_value_per_unit", np.nan)
-        if pd.notna(home_edge) and pd.notna(home_ev):
-            candidates.append({
-                "side": row.get("home_team_name"),
-                "price": row.get("home_moneyline_median"),
-                "edge": float(home_edge),
-                "ev": float(home_ev),
-                "side_type": "home",
-            })
-
-    if has_away_market:
-        away_edge = row.get("edge_away", np.nan)
-        away_ev = row.get("away_expected_value_per_unit", np.nan)
-        if pd.notna(away_edge) and pd.notna(away_ev):
-            candidates.append({
-                "side": row.get("away_team_name"),
-                "price": row.get("away_moneyline_median"),
-                "edge": float(away_edge),
-                "ev": float(away_ev),
-                "side_type": "away",
-            })
-
-    qualifying = [c for c in candidates if c["edge"] >= min_edge and c["ev"] >= min_ev]
-
-    if not qualifying:
-        max_edge = max([c["edge"] for c in candidates], default=np.nan)
-        max_ev = max([c["ev"] for c in candidates], default=np.nan)
-
-        if pd.notna(max_edge) and max_edge < min_edge:
-            reason = "below_min_edge"
-        elif pd.notna(max_ev) and max_ev < min_ev:
-            reason = "below_min_ev"
-        else:
-            reason = "no_positive_qualifying_side"
-
+    if market_prob is None or price is None:
         return {
             "recommended_side": None,
+            "recommended_team_type": side_type,
             "recommended_price": np.nan,
+            "recommended_model_prob": model_prob,
+            "recommended_market_prob": np.nan,
             "edge": np.nan,
             "expected_value_per_unit": np.nan,
-            "no_bet_reason": reason,
+            "no_bet_reason": "no_market_odds_for_model_pick",
         }
 
-    best = max(qualifying, key=lambda c: (c["ev"], c["edge"]))
+    if edge is None or not np.isfinite(edge):
+        return {
+            "recommended_side": None,
+            "recommended_team_type": side_type,
+            "recommended_price": price,
+            "recommended_model_prob": model_prob,
+            "recommended_market_prob": market_prob,
+            "edge": np.nan,
+            "expected_value_per_unit": ev if ev is not None else np.nan,
+            "no_bet_reason": "missing_edge_for_model_pick",
+        }
+
+    if ev is None or not np.isfinite(ev):
+        return {
+            "recommended_side": None,
+            "recommended_team_type": side_type,
+            "recommended_price": price,
+            "recommended_model_prob": model_prob,
+            "recommended_market_prob": market_prob,
+            "edge": edge,
+            "expected_value_per_unit": np.nan,
+            "no_bet_reason": "missing_ev_for_model_pick",
+        }
+
+    if edge < min_edge:
+        return {
+            "recommended_side": None,
+            "recommended_team_type": side_type,
+            "recommended_price": price,
+            "recommended_model_prob": model_prob,
+            "recommended_market_prob": market_prob,
+            "edge": edge,
+            "expected_value_per_unit": ev,
+            "no_bet_reason": "below_min_edge_model_pick",
+        }
+
+    if ev < min_ev:
+        return {
+            "recommended_side": None,
+            "recommended_team_type": side_type,
+            "recommended_price": price,
+            "recommended_model_prob": model_prob,
+            "recommended_market_prob": market_prob,
+            "edge": edge,
+            "expected_value_per_unit": ev,
+            "no_bet_reason": "below_min_ev_model_pick",
+        }
+
     return {
-        "recommended_side": best["side"],
-        "recommended_price": best["price"],
-        "edge": best["edge"],
-        "expected_value_per_unit": best["ev"],
-        "no_bet_reason": "recommended",
+        "recommended_side": side_name,
+        "recommended_team_type": side_type,
+        "recommended_price": price,
+        "recommended_model_prob": model_prob,
+        "recommended_market_prob": market_prob,
+        "edge": edge,
+        "expected_value_per_unit": ev,
+        "no_bet_reason": "recommended_model_pick",
     }
 
 
@@ -716,7 +954,8 @@ def _write_debug_candidate_files(
     debug_dir.mkdir(parents=True, exist_ok=True)
 
     df = _ensure_datetime_columns(frame)
-    unresolved = df[df.get("target_home_win", pd.Series(np.nan, index=df.index)).isna()].copy()
+    target_series = df.get("target_home_win", pd.Series(np.nan, index=df.index))
+    unresolved = df[target_series.isna()].copy()
 
     keep = [
         "game_pk",
@@ -740,6 +979,31 @@ def _write_debug_candidate_files(
     )
 
 
+def _write_empty_predictions(output_path: Path, message: str) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(columns=PREFERRED_OUTPUT_COLUMNS).to_csv(output_path, index=False)
+    print({"predictions": 0, "recommended_bets": 0, "output": str(output_path), "message": message})
+
+
+def _json_feature_value(value: Any) -> Any:
+    if value is None:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except Exception:
+        pass
+    if isinstance(value, (np.integer,)):
+        return int(value)
+    if isinstance(value, (np.floating,)):
+        return float(value)
+    if isinstance(value, (np.ndarray,)):
+        return value.tolist()
+    if isinstance(value, (pd.Timestamp, datetime)):
+        return str(value)
+    return value
+
+
 def main() -> None:
     configure_logging()
     args = parse_args()
@@ -751,17 +1015,51 @@ def main() -> None:
     output_path = Path(args.output) if args.output else settings.data_dir / "predictions" / "mlb_moneyline_predictions.csv"
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
+    if not feature_path.exists():
+        raise FileNotFoundError(f"Feature file not found: {feature_path}")
+    if not model_path.exists():
+        raise FileNotFoundError(f"Model bundle not found: {model_path}")
+
     bundle = load_model_bundle(model_path)
     metadata = _load_adjacent_metadata(model_path)
     estimator = bundle.get("estimator") or bundle.get("model") or bundle.get("pipeline")
     feature_cols = bundle.get("feature_cols") or bundle.get("features") or bundle.get("feature_columns")
-    run_id = bundle.get("run_id") or bundle.get("model_name") or metadata.get("model_name") or model_path.stem
+    champion_run_id = bundle.get("run_id") or metadata.get("run_id") or bundle.get("model_name") or metadata.get("model_name") or model_path.stem
+    champion_model_name = bundle.get("model_name") or metadata.get("model_name") or model_path.stem
+    champion_model_family = bundle.get("model_family") or metadata.get("model_family") or ""
     probability_shrink, shrink_center = _resolve_shrink_settings(args, bundle, metadata)
+
+    pick_tiers = _resolve_pick_tiers(bundle, metadata)
+    missing_pick_tiers_allowed = False
+    if pick_tiers is None:
+        if args.allow_missing_pick_tiers:
+            missing_pick_tiers_allowed = True
+            pick_tiers = {"method": "missing_pick_tiers_fallback", "default_tier": "Pass", "tiers": []}
+            print({"pick_tiers_warning": "No learned pick_tiers found. All rows will be Pass unless --allow-missing-pick-tiers is removed."})
+        else:
+            raise SystemExit(
+                "Model bundle does not contain learned pick_tiers. Re-export the model from the production notebook "
+                "or rerun with --allow-missing-pick-tiers for debugging only."
+            )
+
+    min_pick_tier = None if missing_pick_tiers_allowed else _validate_min_pick_tier(args.min_pick_tier, pick_tiers)
 
     if estimator is None or feature_cols is None:
         raise SystemExit(
             "Model bundle must contain an estimator/model/pipeline and feature_cols/features/feature_columns."
         )
+    feature_cols = list(feature_cols)
+
+    print({
+        "loaded_model": str(model_path),
+        "champion_run_id": champion_run_id,
+        "champion_model_name": champion_model_name,
+        "champion_model_family": champion_model_family,
+        "feature_count": len(feature_cols),
+        "pick_tier_method": pick_tiers.get("method"),
+        "learned_tiers": pick_tiers.get("tiers", []),
+        "min_pick_tier_for_recommendations": min_pick_tier,
+    })
 
     frame = pd.read_parquet(feature_path)
     scored_at_ts, start_ts, end_ts = _build_scoring_window(args)
@@ -778,15 +1076,14 @@ def main() -> None:
     if args.write_debug_candidates:
         _write_debug_candidate_files(frame, output_path, start_ts, end_ts)
 
-    # Final market-odds attachment directly from odds.db. This fixes games whose
-    # MLB official_date differs from the Odds API UTC commence date.
-    upcoming = attach_latest_moneyline_odds_from_db(upcoming, settings.odds_db_path)
-
     if upcoming.empty:
-        raise SystemExit(
-            "No true upcoming scoring candidates found. "
-            f"Diagnostics: {json.dumps(diagnostics, default=str)}"
+        _write_empty_predictions(
+            output_path,
+            "No true upcoming scoring candidates found. " + json.dumps(diagnostics, default=str),
         )
+        return
+
+    upcoming = attach_latest_moneyline_odds_from_db(upcoming, settings.odds_db_path)
 
     if args.only_bettable:
         required_market_cols = [
@@ -805,11 +1102,12 @@ def main() -> None:
             & upcoming["away_moneyline_median"].notna()
         ].copy()
         if upcoming.empty:
-            raise SystemExit("No bettable games with matched market odds found in the scoring window.")
+            _write_empty_predictions(output_path, "No bettable games with matched market odds found in the scoring window.")
+            return
 
     missing_cols = [c for c in feature_cols if c not in upcoming.columns]
     if missing_cols:
-        raise SystemExit(f"Feature file missing model columns: {missing_cols}")
+        raise SystemExit(f"Feature file missing model columns: {missing_cols[:50]}{'...' if len(missing_cols) > 50 else ''}")
 
     market_cols = [
         "market_home_no_vig_prob",
@@ -821,17 +1119,20 @@ def main() -> None:
         if col not in upcoming.columns:
             upcoming[col] = np.nan
 
-    raw_probs = estimator.predict_proba(upcoming[feature_cols])[:, 1]
-    shrunk_probs = apply_probability_shrink(
+    raw_probs = predict_home_win_prob(estimator, upcoming[feature_cols])
+    final_probs = apply_probability_shrink(
         raw_probs,
         shrink=probability_shrink,
         center=shrink_center,
     )
-    upcoming["model_home_win_prob_raw"] = raw_probs
-    upcoming["model_home_win_prob"] = shrunk_probs
+
+    upcoming["model_home_win_prob_raw"] = np.clip(raw_probs, 1e-6, 1 - 1e-6)
+    upcoming["model_home_win_prob"] = np.clip(final_probs, 1e-6, 1 - 1e-6)
     upcoming["model_away_win_prob"] = 1.0 - upcoming["model_home_win_prob"]
     upcoming["probability_shrink"] = probability_shrink
     upcoming["shrink_center"] = shrink_center
+
+    upcoming = _add_model_pick_columns(upcoming, pick_tiers)
 
     upcoming["edge_home"] = upcoming["model_home_win_prob"] - upcoming["market_home_no_vig_prob"]
     upcoming["edge_away"] = upcoming["model_away_win_prob"] - upcoming["market_away_no_vig_prob"]
@@ -848,59 +1149,36 @@ def main() -> None:
         & upcoming["away_moneyline_median"].notna()
     )
 
+    upcoming = _add_model_pick_market_columns(upcoming)
+
     recs = upcoming.apply(
-        lambda row: _choose_recommendation(row, args.min_edge, args.min_ev),
+        lambda row: _choose_recommendation(row, args.min_edge, args.min_ev, min_pick_tier, pick_tiers),
         axis=1,
         result_type="expand",
     )
     for col in recs.columns:
         upcoming[col] = recs[col]
 
-    upcoming["run_id"] = run_id
+    score_run_id = f"score_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{champion_run_id}"
+    upcoming["run_id"] = score_run_id
+    upcoming["champion_model_run_id"] = champion_run_id
+    upcoming["champion_model_name"] = champion_model_name
+    upcoming["champion_model_family"] = champion_model_family
+    upcoming["champion_pick_tier_method"] = pick_tiers.get("method", "")
+    upcoming["min_pick_tier"] = min_pick_tier if min_pick_tier is not None else "Any"
     upcoming["scored_at_utc"] = scored_at_ts.replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
-    keep = [
-        "run_id",
-        "scored_at_utc",
-        "game_pk",
-        "official_date",
-        "game_datetime_utc",
-        "abstract_state",
-        "detailed_state",
-        "home_team_name",
-        "away_team_name",
-        "model_home_win_prob_raw",
-        "model_home_win_prob",
-        "model_away_win_prob",
-        "probability_shrink",
-        "shrink_center",
-        "market_home_no_vig_prob",
-        "market_away_no_vig_prob",
-        "home_moneyline_median",
-        "away_moneyline_median",
-        "odds_event_id",
-        "odds_start_diff_minutes",
-        "edge_home",
-        "edge_away",
-        "home_expected_value_per_unit",
-        "away_expected_value_per_unit",
-        "has_market_odds",
-        "recommended_side",
-        "recommended_price",
-        "edge",
-        "expected_value_per_unit",
-        "no_bet_reason",
-    ]
-    pred = upcoming[[c for c in keep if c in upcoming.columns]].copy()
+    pred = upcoming[[c for c in PREFERRED_OUTPUT_COLUMNS if c in upcoming.columns]].copy()
+    pred = pred.sort_values(["game_datetime_utc", "game_pk"] if "game_pk" in pred.columns else ["game_datetime_utc"])
     pred.to_csv(output_path, index=False)
 
     rows = []
     for _, row in upcoming.iterrows():
-        feature_snapshot = {c: (None if pd.isna(row.get(c)) else row.get(c)) for c in feature_cols}
+        feature_snapshot = {c: _json_feature_value(row.get(c)) for c in feature_cols}
         rows.append({
-            "run_id": run_id,
+            "run_id": score_run_id,
             "scored_at_utc": row["scored_at_utc"],
-            "game_pk": int(row["game_pk"]),
+            "game_pk": int(row["game_pk"]) if pd.notna(row.get("game_pk")) else None,
             "official_date": row.get("official_date"),
             "game_datetime_utc": str(row.get("game_datetime_utc")),
             "home_team_name": row.get("home_team_name"),
@@ -922,10 +1200,12 @@ def main() -> None:
 
     recommended = int(pred["recommended_side"].notna().sum()) if "recommended_side" in pred.columns else 0
     bettable = int(pred["has_market_odds"].sum()) if "has_market_odds" in pred.columns else 0
+    tier_counts = pred["pick_tier"].value_counts(dropna=False).to_dict() if "pick_tier" in pred.columns else {}
     print({
         "predictions": len(pred),
         "bettable_with_market_odds": bettable,
         "recommended_bets": recommended,
+        "tier_counts": tier_counts,
         "inserted_db_rows": count,
         "output": str(output_path),
         "model": str(model_path),
@@ -933,6 +1213,9 @@ def main() -> None:
         "score_end": str(end_ts),
         "probability_shrink": probability_shrink,
         "shrink_center": shrink_center,
+        "min_pick_tier": min_pick_tier if min_pick_tier is not None else "Any",
+        "min_edge": args.min_edge,
+        "min_ev": args.min_ev,
     })
 
 
