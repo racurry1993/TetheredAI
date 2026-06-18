@@ -1,0 +1,168 @@
+{
+  "run_id": "mlb_moneyline_rf_iso_learned_tiers_20260617_211347",
+  "created_at_utc": "2026-06-17T21:13:47Z",
+  "model_name": "full_rf_isotonic_learned_tiers",
+  "model_family": "random_forest_isotonic_calibrated",
+  "model_type": "moneyline_home_win_classifier",
+  "target_col": "target_home_win",
+  "positive_class": 1,
+  "positive_class_definition": "home team wins",
+  "probability_column_definition": "model_home_win_prob = P(target_home_win == 1)",
+  "feature_source": "best_cal_cols",
+  "feature_count": 1987,
+  "rf_param_source": "derived_from_base_rf",
+  "rf_params": {
+    "n_estimators": 700,
+    "criterion": "gini",
+    "max_depth": null,
+    "min_samples_split": 2,
+    "min_samples_leaf": 25,
+    "min_weight_fraction_leaf": 0.0,
+    "max_features": "sqrt",
+    "max_leaf_nodes": null,
+    "min_impurity_decrease": 0.0,
+    "bootstrap": true,
+    "oob_score": false,
+    "class_weight": null,
+    "ccp_alpha": 0.0,
+    "max_samples": null,
+    "random_state": 42,
+    "n_jobs": -1
+  },
+  "split_policy": {
+    "fit_fraction": 0.7,
+    "calibration_fraction": 0.15,
+    "tier_selection_fraction": 0.15,
+    "test_fraction": 0.2,
+    "split_type": "chronological"
+  },
+  "split_dates": {
+    "fit_min": "2023-03-30T00:00:00",
+    "fit_max": "2024-09-16T00:00:00",
+    "cal_min": "2024-09-16T00:00:00",
+    "cal_max": "2025-05-28T00:00:00",
+    "tier_min": "2025-05-28T00:00:00",
+    "tier_max": "2025-08-15T00:00:00",
+    "test_min": "2025-08-15T00:00:00",
+    "test_max": "2026-06-14T00:00:00"
+  },
+  "metrics_on_test": {
+    "log_loss": 0.6985471652953373,
+    "brier": 0.249670082238263,
+    "auc": 0.553910646226693,
+    "accuracy": 0.5508373205741627,
+    "avg_pred": 0.5514218929193059,
+    "actual_mean": 0.5316985645933014
+  },
+  "pick_tiers": {
+    "method": "selected_side_validation_threshold_learning_v2",
+    "default_tier": "Pass",
+    "baseline_accuracy": 0.53938185443669,
+    "best_stable_accuracy": 0.8,
+    "performance_lift": 0.2606181455633101,
+    "min_stable_picks": 20,
+    "tier_policy": {
+      "Lean": {
+        "lift_frac": 0.2,
+        "min_coverage": 0.1
+      },
+      "Strong": {
+        "lift_frac": 0.35,
+        "min_coverage": 0.07
+      },
+      "Premium": {
+        "lift_frac": 0.7,
+        "min_coverage": 0.03
+      },
+      "Elite": {
+        "lift_frac": 0.95,
+        "min_coverage": 0.02
+      }
+    },
+    "tiers": [
+      {
+        "tier": "Lean",
+        "threshold": 0.657249,
+        "validation_games_picked": 106,
+        "validation_coverage": 0.10568295114656032,
+        "validation_accuracy": 0.6509433962264151,
+        "validation_accuracy_ci_low": 0.5563658870548236,
+        "validation_accuracy_ci_high": 0.7349630914890337,
+        "validation_avg_confidence": 0.7749447179553156,
+        "target_accuracy_used": 0.591505483549352,
+        "min_picks_used": 101,
+        "selection_reason": "met_target_accuracy_and_min_volume"
+      },
+      {
+        "tier": "Strong",
+        "threshold": 0.735294,
+        "validation_games_picked": 106,
+        "validation_coverage": 0.10568295114656032,
+        "validation_accuracy": 0.6509433962264151,
+        "validation_accuracy_ci_low": 0.5563658870548236,
+        "validation_accuracy_ci_high": 0.7349630914890337,
+        "validation_avg_confidence": 0.7749447179553156,
+        "target_accuracy_used": 0.6305982053838485,
+        "min_picks_used": 71,
+        "selection_reason": "met_target_accuracy_and_min_volume"
+      },
+      {
+        "tier": "Premium",
+        "threshold": 0.736696,
+        "validation_games_picked": 43,
+        "validation_coverage": 0.04287138584247258,
+        "validation_accuracy": 0.7441860465116279,
+        "validation_accuracy_ci_low": 0.5976159650115332,
+        "validation_accuracy_ci_high": 0.8507048287619176,
+        "validation_avg_confidence": 0.8330048575047846,
+        "target_accuracy_used": 0.721814556331007,
+        "min_picks_used": 31,
+        "selection_reason": "met_target_accuracy_and_min_volume"
+      },
+      {
+        "tier": "Elite",
+        "threshold": 0.818182,
+        "validation_games_picked": 25,
+        "validation_coverage": 0.024925224327018942,
+        "validation_accuracy": 0.8,
+        "validation_accuracy_ci_low": 0.6086904963045967,
+        "validation_accuracy_ci_high": 0.9113941531319742,
+        "validation_avg_confidence": 0.8444093666727431,
+        "target_accuracy_used": 0.7869690927218345,
+        "min_picks_used": 21,
+        "selection_reason": "met_target_accuracy_and_min_volume"
+      }
+    ]
+  },
+  "test_tier_eval": [
+    {
+      "pick_tier": "Strong",
+      "picks": 83,
+      "accuracy": 0.6867469879518072,
+      "avg_confidence": 0.7352941176470589
+    },
+    {
+      "pick_tier": "Premium",
+      "picks": 19,
+      "accuracy": 0.5263157894736842,
+      "avg_confidence": 0.8148776599525914
+    },
+    {
+      "pick_tier": "Elite",
+      "picks": 36,
+      "accuracy": 0.75,
+      "avg_confidence": 0.8421851143369403
+    },
+    {
+      "pick_tier": "Pass",
+      "picks": 1534,
+      "accuracy": 0.5391134289439374,
+      "avg_confidence": 0.5802124646989679
+    }
+  ],
+  "python_version": "3.11.5",
+  "sklearn_version": "1.7.2",
+  "pandas_version": "2.3.3",
+  "numpy_version": "2.4.4",
+  "notes": "Production moneyline model with pick tiers learned from selected-side validation performance. Daily scoring should read pick_tiers from this bundle rather than hard-coding thresholds."
+}

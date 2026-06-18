@@ -1,0 +1,80 @@
+{
+  "method": "selected_side_validation_threshold_learning_v2",
+  "default_tier": "Pass",
+  "baseline_accuracy": 0.53938185443669,
+  "best_stable_accuracy": 0.8,
+  "performance_lift": 0.2606181455633101,
+  "min_stable_picks": 20,
+  "tier_policy": {
+    "Lean": {
+      "lift_frac": 0.2,
+      "min_coverage": 0.1
+    },
+    "Strong": {
+      "lift_frac": 0.35,
+      "min_coverage": 0.07
+    },
+    "Premium": {
+      "lift_frac": 0.7,
+      "min_coverage": 0.03
+    },
+    "Elite": {
+      "lift_frac": 0.95,
+      "min_coverage": 0.02
+    }
+  },
+  "tiers": [
+    {
+      "tier": "Lean",
+      "threshold": 0.657249,
+      "validation_games_picked": 106,
+      "validation_coverage": 0.10568295114656032,
+      "validation_accuracy": 0.6509433962264151,
+      "validation_accuracy_ci_low": 0.5563658870548236,
+      "validation_accuracy_ci_high": 0.7349630914890337,
+      "validation_avg_confidence": 0.7749447179553156,
+      "target_accuracy_used": 0.591505483549352,
+      "min_picks_used": 101,
+      "selection_reason": "met_target_accuracy_and_min_volume"
+    },
+    {
+      "tier": "Strong",
+      "threshold": 0.735294,
+      "validation_games_picked": 106,
+      "validation_coverage": 0.10568295114656032,
+      "validation_accuracy": 0.6509433962264151,
+      "validation_accuracy_ci_low": 0.5563658870548236,
+      "validation_accuracy_ci_high": 0.7349630914890337,
+      "validation_avg_confidence": 0.7749447179553156,
+      "target_accuracy_used": 0.6305982053838485,
+      "min_picks_used": 71,
+      "selection_reason": "met_target_accuracy_and_min_volume"
+    },
+    {
+      "tier": "Premium",
+      "threshold": 0.736696,
+      "validation_games_picked": 43,
+      "validation_coverage": 0.04287138584247258,
+      "validation_accuracy": 0.7441860465116279,
+      "validation_accuracy_ci_low": 0.5976159650115332,
+      "validation_accuracy_ci_high": 0.8507048287619176,
+      "validation_avg_confidence": 0.8330048575047846,
+      "target_accuracy_used": 0.721814556331007,
+      "min_picks_used": 31,
+      "selection_reason": "met_target_accuracy_and_min_volume"
+    },
+    {
+      "tier": "Elite",
+      "threshold": 0.818182,
+      "validation_games_picked": 25,
+      "validation_coverage": 0.024925224327018942,
+      "validation_accuracy": 0.8,
+      "validation_accuracy_ci_low": 0.6086904963045967,
+      "validation_accuracy_ci_high": 0.9113941531319742,
+      "validation_avg_confidence": 0.8444093666727431,
+      "target_accuracy_used": 0.7869690927218345,
+      "min_picks_used": 21,
+      "selection_reason": "met_target_accuracy_and_min_volume"
+    }
+  ]
+}

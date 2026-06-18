@@ -202,7 +202,10 @@ def run_pipeline(args: argparse.Namespace) -> None:
             run_python(["scripts/10_validate_statcast_features.py"], required=True)
 
         if args.build_features:
-            run_python(["scripts/03_build_features.py"], required=True)
+            feature_args = ["scripts/03_build_features.py"]
+            if not args.build_features_statcast:
+                feature_args.append("--no-statcast")
+            run_python(feature_args, required=True)
 
         if args.score_games:
             champion = ROOT / "models" / "mlb_moneyline_champion.joblib"
@@ -244,6 +247,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--refresh-statcast", action="store_true", default=env_bool("REFRESH_STATCAST", False))
     parser.add_argument("--validate-statcast", action="store_true", default=env_bool("VALIDATE_STATCAST", False))
     parser.add_argument("--build-features", action="store_true", default=env_bool("BUILD_FEATURES", True))
+    parser.add_argument(
+        "--build-features-statcast",
+        action="store_true",
+        default=env_bool("BUILD_FEATURES_STATCAST", False),
+        help=(
+            "Include Statcast attachment when running scripts/03_build_features.py. "
+            "Default is false for daily Cloud Run stability; use true for feature-refresh/backfill jobs."
+        ),
+    )
     parser.add_argument("--score-games", action="store_true", default=env_bool("SCORE_GAMES", False))
 
     parser.add_argument("--markets", default=os.environ.get("ODDS_MARKETS", "h2h"))
@@ -275,6 +287,7 @@ def main() -> None:
     log(f"GCS_BUCKET={os.environ.get('GCS_BUCKET', '')}")
     log(f"START_DATE={getattr(args, 'start_date', None)} END_DATE={getattr(args, 'end_date', None)}")
     log(f"STATCAST_START_DATE={getattr(args, 'statcast_start_date', None)} STATCAST_END_DATE={getattr(args, 'statcast_end_date', None)}")
+    log(f"BUILD_FEATURES={getattr(args, 'build_features', None)} BUILD_FEATURES_STATCAST={getattr(args, 'build_features_statcast', None)} SCORE_GAMES={getattr(args, 'score_games', None)}")
 
     if args.mode == "smoke":
         smoke_test()
