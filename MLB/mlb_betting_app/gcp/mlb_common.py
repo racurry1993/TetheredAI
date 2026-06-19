@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 import requests
 from google.cloud import storage
 from pybaseball import statcast
@@ -47,7 +49,7 @@ def upload_text(bucket_name: str, object_name: str, text: str, content_type: str
     client = storage.Client()
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(object_name)
-    blob.upload_from_string(text, content_type=content_type)
+    blob.upload_from_string(text, content_type=content_type, timeout=600)
 
 
 def upload_json(bucket_name: str, object_name: str, data: dict[str, Any]) -> None:
@@ -58,7 +60,7 @@ def upload_file(bucket_name: str, object_name: str, local_path: str, content_typ
     client = storage.Client()
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(object_name)
-    blob.upload_from_filename(local_path, content_type=content_type)
+    blob.upload_from_filename(local_path, content_type=content_type, timeout=600)
 
 
 @retry(stop=stop_after_attempt(4), wait=wait_exponential(multiplier=1, min=1, max=30))
@@ -69,6 +71,7 @@ def get_json(url: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
 
 
 def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """General normalizer for non-Statcast tables such as schedule/game index."""
     df = df.copy()
     df.columns = [str(c).strip().lower().replace(".", "_").replace(" ", "_") for c in df.columns]
 
@@ -80,6 +83,38 @@ def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
             df[col] = df[col].astype("string")
 
     return df
+
+
+def normalize_statcast_for_raw_parquet(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Normalize Statcast chunks for stable raw-layer Parquet loading into BigQuery.
+
+    Statcast/pybaseball can infer different dtypes for the same field across
+    chunks, for example attack_angle as INT64 in one file and FLOAT64 in another.
+    BigQuery expects compatible Parquet schemas when loading many files together.
+
+    Raw-layer strategy:
+    - normalize column names
+    - store every field as STRING
+    - cast numeric/date fields later with SAFE_CAST in feature-building SQL
+    """
+    df = df.copy()
+    df.columns = [str(c).strip().lower().replace(".", "_").replace(" ", "_") for c in df.columns]
+
+    if "game_date" in df.columns:
+        df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+
+    for col in df.columns:
+        df[col] = df[col].astype("string")
+
+    return df
+
+
+def write_all_string_parquet(df: pd.DataFrame, local_path: str) -> None:
+    """Write a DataFrame as Parquet with an explicit all-STRING PyArrow schema."""
+    schema = pa.schema([pa.field(col, pa.string()) for col in df.columns])
+    table = pa.Table.from_pandas(df, schema=schema, preserve_index=False)
+    pq.write_table(table, local_path, compression="snappy")
 
 
 def schedule_to_game_index(schedule: dict[str, Any], season: int | None = None) -> pd.DataFrame:
@@ -212,11 +247,13 @@ def fetch_and_stage_statcast(
             time.sleep(sleep_seconds)
             continue
 
-        df = normalize_columns(df)
+        df = normalize_statcast_for_raw_parquet(df)
         local_path = f"/tmp/statcast_{chunk_start}_{chunk_end}.parquet"
         object_name = f"{object_prefix}/start_date={chunk_start}/end_date={chunk_end}/statcast.parquet"
-        df.to_parquet(local_path, index=False)
+
+        write_all_string_parquet(df, local_path)
         upload_file(bucket, object_name, local_path)
+
         uploaded.append(object_name)
         print(f"Uploaded {len(df):,} Statcast rows to gs://{bucket}/{object_name}")
         time.sleep(sleep_seconds)
