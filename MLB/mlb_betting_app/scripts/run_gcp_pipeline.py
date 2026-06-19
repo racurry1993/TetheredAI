@@ -87,22 +87,26 @@ def script_supports(script_path: str, flag: str) -> bool:
     return flag in combined
 
 
-def download_state() -> None:
+def download_state(sync_raw: bool = False) -> None:
     bucket = get_bucket()
     ensure_dirs()
     download_blob_if_exists(bucket, "mlb/state/odds.db", ROOT / "data" / "odds.db")
     download_prefix(bucket, "mlb/models", ROOT / "models")
     download_prefix(bucket, "mlb/processed", ROOT / "data" / "processed")
     download_prefix(bucket, "mlb/predictions", ROOT / "data" / "predictions")
+    if sync_raw:
+        download_prefix(bucket, "mlb/raw", ROOT / "data" / "raw")
 
 
-def upload_state() -> None:
+def upload_state(sync_raw: bool = False) -> None:
     bucket = get_bucket()
     ensure_dirs()
     upload_blob_if_exists(bucket, ROOT / "data" / "odds.db", "mlb/state/odds.db")
     upload_prefix(bucket, ROOT / "data" / "processed", "mlb/processed")
     upload_prefix(bucket, ROOT / "data" / "predictions", "mlb/predictions")
     upload_prefix(bucket, ROOT / "models", "mlb/models")
+    if sync_raw:
+        upload_prefix(bucket, ROOT / "data" / "raw", "mlb/raw")
 
 
 def smoke_test() -> None:
@@ -114,6 +118,8 @@ def smoke_test() -> None:
         "scripts/00_init_db.py",
         "scripts/02_fetch_mlb_games.py",
         "scripts/03_build_features.py",
+        "scripts/03_build_notebook_features.py",
+        "src/mlb_betting/notebook_feature_builder.py",
         "src/mlb_betting/gcs_state.py",
     ]
     for rel in required:
@@ -138,7 +144,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
 
     try:
         if args.download_state:
-            download_state()
+            download_state(sync_raw=args.sync_raw_state)
 
         run_python(["scripts/00_init_db.py"])
 
@@ -196,15 +202,34 @@ def run_pipeline(args: argparse.Namespace) -> None:
             # Checkpoint immediately after the expensive Statcast step.
             if args.upload_state:
                 log("Checkpoint upload after Statcast step")
-                upload_state()
+                upload_state(sync_raw=args.sync_raw_state)
+
+        if args.refresh_notebook_boxscores:
+            nb_box_args = [
+                "scripts/11_refresh_notebook_boxscores.py",
+                "--days-back", str(args.notebook_boxscore_days_back),
+                "--sleep", str(args.boxscore_sleep),
+            ]
+            run_python(nb_box_args, required=True)
+            if args.upload_state:
+                log("Checkpoint upload after notebook-compatible raw boxscore refresh")
+                upload_state(sync_raw=args.sync_raw_state)
 
         if args.validate_statcast and (ROOT / "scripts" / "10_validate_statcast_features.py").exists():
             run_python(["scripts/10_validate_statcast_features.py"], required=True)
 
         if args.build_features:
-            feature_args = ["scripts/03_build_features.py"]
-            if not args.build_features_statcast:
-                feature_args.append("--no-statcast")
+            if args.feature_builder == "notebook":
+                feature_args = [
+                    "scripts/03_build_notebook_features.py",
+                    "--expected-features", "models/mlb_moneyline_champion_features.json",
+                ]
+                if args.allow_missing_model_cols:
+                    feature_args.append("--allow-missing-model-cols")
+            else:
+                feature_args = ["scripts/03_build_features.py"]
+                if not args.build_features_statcast:
+                    feature_args.append("--no-statcast")
             run_python(feature_args, required=True)
 
         if args.score_games:
@@ -226,7 +251,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
                 log("Champion model missing at models/mlb_moneyline_champion.joblib; skipping scoring")
 
         if args.upload_state:
-            upload_state()
+            upload_state(sync_raw=args.sync_raw_state)
     finally:
         if lock is not None:
             lock.release()
@@ -240,6 +265,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--download-state", action="store_true", default=env_bool("DOWNLOAD_STATE", True))
     parser.add_argument("--upload-state", action="store_true", default=env_bool("UPLOAD_STATE", True))
     parser.add_argument("--use-lock", action="store_true", default=env_bool("GCS_USE_LOCK", True))
+    parser.add_argument("--sync-raw-state", action="store_true", default=env_bool("SYNC_RAW_STATE", False), help="Download/upload gs://bucket/mlb/raw into data/raw.")
 
     parser.add_argument("--fetch-odds", action="store_true", default=env_bool("FETCH_ODDS", False))
     parser.add_argument("--fetch-games", action="store_true", default=env_bool("FETCH_GAMES", True))
@@ -247,6 +273,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--refresh-statcast", action="store_true", default=env_bool("REFRESH_STATCAST", False))
     parser.add_argument("--validate-statcast", action="store_true", default=env_bool("VALIDATE_STATCAST", False))
     parser.add_argument("--build-features", action="store_true", default=env_bool("BUILD_FEATURES", True))
+    parser.add_argument("--feature-builder", default=env_str("FEATURE_BUILDER", "production"), choices=["production", "notebook"], help="Use the current production builder or the notebook-compatible champion-schema builder.")
     parser.add_argument(
         "--build-features-statcast",
         action="store_true",
@@ -257,6 +284,8 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument("--score-games", action="store_true", default=env_bool("SCORE_GAMES", False))
+    parser.add_argument("--refresh-notebook-boxscores", action="store_true", default=env_bool("REFRESH_NOTEBOOK_BOXSCORES", False), help="Update rich notebook-compatible raw boxscore parquet files before building notebook features.")
+    parser.add_argument("--allow-missing-model-cols", action="store_true", default=env_bool("ALLOW_MISSING_MODEL_COLS", False), help="Let notebook builder fill missing champion columns with NaN instead of failing.")
 
     parser.add_argument("--markets", default=os.environ.get("ODDS_MARKETS", "h2h"))
     parser.add_argument("--days-back", type=int, default=env_int("DAYS_BACK", 14))
@@ -265,6 +294,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--end-date", default=env_str("END_DATE", None), help="YYYY-MM-DD upper bound; omit to use today + DAYS_FORWARD")
     parser.add_argument("--game-chunk-days", type=int, default=env_int("GAME_CHUNK_DAYS", 30))
     parser.add_argument("--boxscore-sleep", type=float, default=float(os.environ.get("BOXSCORE_SLEEP", "0.10")))
+    parser.add_argument("--notebook-boxscore-days-back", type=int, default=env_int("NOTEBOOK_BOXSCORE_DAYS_BACK", 14))
 
     parser.add_argument("--statcast-days-back", type=int, default=env_int("STATCAST_DAYS_BACK", 14))
     parser.add_argument("--statcast-start-date", default=env_str("STATCAST_START_DATE", None), help="YYYY-MM-DD lower bound for Statcast; defaults to START_DATE when set")
@@ -287,6 +317,7 @@ def main() -> None:
     log(f"GCS_BUCKET={os.environ.get('GCS_BUCKET', '')}")
     log(f"START_DATE={getattr(args, 'start_date', None)} END_DATE={getattr(args, 'end_date', None)}")
     log(f"STATCAST_START_DATE={getattr(args, 'statcast_start_date', None)} STATCAST_END_DATE={getattr(args, 'statcast_end_date', None)}")
+    log(f"FEATURE_BUILDER={getattr(args, 'feature_builder', None)} SYNC_RAW_STATE={getattr(args, 'sync_raw_state', None)} REFRESH_NOTEBOOK_BOXSCORES={getattr(args, 'refresh_notebook_boxscores', None)}")
     log(f"BUILD_FEATURES={getattr(args, 'build_features', None)} BUILD_FEATURES_STATCAST={getattr(args, 'build_features_statcast', None)} SCORE_GAMES={getattr(args, 'score_games', None)}")
 
     if args.mode == "smoke":
