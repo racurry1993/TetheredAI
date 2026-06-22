@@ -1,0 +1,15 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt /app/requirements.txt
+
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r /app/requirements.txt
+
+COPY . /app
+
+ENV PROJECT_ID=tetheredai-preds
+ENV BUCKET=tetheredai-preds-sports-edge-data
+
+ENTRYPOINT ["python", "run_mlb_daily_pipeline.py"]
